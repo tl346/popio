@@ -464,13 +464,13 @@ private enum MainTab: CaseIterable, Hashable {
         case .popUps:
             return "storefront"
         case .map:
-            return "map.fill"
+            return "map"
         case .mvps:
-            return "trophy.fill"
+            return "trophy"
         case .popUpRequests:
-            return "tray.full.fill"
+            return "tray.full"
         case .profile:
-            return "person.crop.circle.fill"
+            return "person.crop.circle"
         }
     }
 }
@@ -557,10 +557,8 @@ private struct CompactTabBar: View {
         Button {
             addAction()
         } label: {
-            Image(systemName: "plus.circle.fill")
+            Image(systemName: "plus.circle")
                 .font(PopioFont.custom(size: 28, weight: .medium))
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(.white, PopioTheme.gold)
             .frame(maxWidth: .infinity)
             .frame(height: 44)
             .foregroundStyle(PopioTheme.gold)
