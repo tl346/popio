@@ -284,7 +284,7 @@ private struct InlineFeedSearchView: View {
     private func searchIcon(_ systemImage: String) -> some View {
         Image(systemName: systemImage)
             .font(PopioFont.custom(size: 15, weight: .medium))
-            .foregroundStyle(PopioTheme.coral)
+            .foregroundStyle(PopioTheme.gold)
             .frame(width: 20)
     }
 }
@@ -440,7 +440,7 @@ struct EventMapView: View {
                                     .font(PopioFont.custom(size: 11, weight: .heavy))
                                     .foregroundStyle(.white)
                                     .frame(minWidth: 24, minHeight: 24)
-                                    .background(PopioTheme.coral, in: Circle())
+                                    .background(PopioTheme.gold, in: Circle())
                             }
                             .foregroundStyle(PopioTheme.ink)
                             .padding(.horizontal, 16)
@@ -448,7 +448,7 @@ struct EventMapView: View {
                             .background(.ultraThinMaterial, in: Capsule())
                             .overlay {
                                 Capsule()
-                                    .stroke(PopioTheme.coral.opacity(0.24), lineWidth: 1)
+                                    .stroke(PopioTheme.gold.opacity(0.24), lineWidth: 1)
                             }
                             .shadow(color: PopioTheme.shadow.opacity(0.5), radius: 16, x: 0, y: 8)
                         }
@@ -922,7 +922,7 @@ private struct FilterPill: View {
         if isActive {
             return AnyShapeStyle(
                 LinearGradient(
-                    colors: [PopioTheme.coral, PopioTheme.gold],
+                    colors: [PopioTheme.gold, PopioTheme.gold.opacity(0.82)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -1022,7 +1022,7 @@ private struct EventCardMetaRow: View {
         HStack(spacing: 5) {
             Image(systemName: systemImage)
                 .font(PopioFont.custom(size: 10, weight: .semibold))
-                .foregroundStyle(PopioTheme.coral)
+                .foregroundStyle(PopioTheme.gold)
                 .frame(width: 12)
 
             Text(text)

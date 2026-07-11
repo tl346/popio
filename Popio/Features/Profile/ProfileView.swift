@@ -295,8 +295,8 @@ private enum ProfilePalette {
     static let ink = PopioTheme.ink
     static let body = PopioTheme.ink.opacity(0.82)
     static let muted = PopioTheme.muted
-    static let orange = PopioTheme.coral
-    static let orangeSoft = PopioTheme.coralSoft
+    static let orange = PopioTheme.gold
+    static let orangeSoft = PopioTheme.gold.opacity(0.16)
     static let line = PopioTheme.line
     static let shadow = PopioTheme.shadow
 }

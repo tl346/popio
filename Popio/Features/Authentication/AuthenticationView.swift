@@ -264,11 +264,11 @@ private enum AuthPalette {
     static let muted = PopioTheme.muted
     static let fieldFill = PopioTheme.surface.opacity(0.76)
     static let fieldBorder = PopioTheme.gold.opacity(0.28)
-    static let accentOrange = PopioTheme.coral
+    static let accentOrange = PopioTheme.gold
     static let accentGold = PopioTheme.gold
     static let primaryShadow = PopioTheme.gold.opacity(0.26)
     static let primaryGradient = LinearGradient(
-        colors: [accentOrange, accentGold],
+        colors: [accentGold, accentGold.opacity(0.82)],
         startPoint: .leading,
         endPoint: .trailing
     )

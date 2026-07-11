@@ -281,7 +281,7 @@ struct CreateEventView: View {
             if isDatePickerExpanded {
                 DatePicker("", selection: $eventDate, displayedComponents: .date)
                     .datePickerStyle(.graphical)
-                    .tint(PopioTheme.coral)
+                    .tint(PopioTheme.gold)
                     .scaleEffect(0.82, anchor: .top)
                     .frame(height: 270, alignment: .top)
                     .padding(.horizontal, 6)
@@ -429,7 +429,7 @@ struct CreateEventView: View {
                         addCustomTag()
                     }
                     .font(PopioFont.custom(size: 13, weight: .semibold))
-                    .foregroundStyle(PopioTheme.coral)
+                    .foregroundStyle(PopioTheme.gold)
                     .buttonStyle(.plain)
                 }
             }
@@ -467,10 +467,10 @@ struct CreateEventView: View {
         if let errorMessage {
             Label(errorMessage, systemImage: "exclamationmark.circle.fill")
                 .font(PopioFont.footnote(.semibold))
-                .foregroundStyle(PopioTheme.coral)
+                .foregroundStyle(PopioTheme.gold)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(PopioTheme.coral.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .background(PopioTheme.gold.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }
 
@@ -495,7 +495,7 @@ struct CreateEventView: View {
             .background(
                 LinearGradient(
                     colors: [
-                        PopioTheme.coral,
+                        PopioTheme.gold,
                         PopioTheme.gold
                     ],
                     startPoint: .leading,
@@ -667,7 +667,7 @@ private struct CreateFormLabel: View {
             if isRequired {
                 Text("*")
                     .font(PopioFont.custom(size: 14, weight: .semibold))
-                    .foregroundStyle(PopioTheme.coral)
+                    .foregroundStyle(PopioTheme.gold)
             }
         }
     }
@@ -722,7 +722,7 @@ private struct CreateOptionalTimeField: View {
                 HStack(spacing: 6) {
                     DatePicker(title, selection: binding, displayedComponents: .hourAndMinute)
                         .labelsHidden()
-                        .tint(PopioTheme.coral)
+                        .tint(PopioTheme.gold)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     Button {

@@ -148,7 +148,7 @@ struct EventDetailView: View {
         } label: {
             Image(systemName: session.isLikedByCurrentUser(currentEvent) ? "heart.fill" : "heart")
                 .font(PopioFont.custom(size: 21, weight: .semibold))
-                .foregroundStyle(PopioTheme.coral)
+                .foregroundStyle(PopioTheme.gold)
                 .frame(width: 54, height: 54)
                 .background(Color.white.opacity(0.96), in: Circle())
                 .shadow(color: PopioTheme.shadow.opacity(0.20), radius: 14, y: 7)
@@ -250,7 +250,7 @@ struct EventDetailView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
         }
-        .foregroundStyle(PopioTheme.coral)
+        .foregroundStyle(PopioTheme.gold)
         .background(Color.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -294,7 +294,7 @@ struct EventDetailView: View {
                         Label("Get Directions", systemImage: "chevron.right")
                             .labelStyle(.titleAndIcon)
                             .font(PopioFont.custom(size: 13, weight: .semibold))
-                            .foregroundStyle(PopioTheme.coral)
+                            .foregroundStyle(PopioTheme.gold)
                     }
                 }
                 .padding(14)
@@ -352,7 +352,7 @@ struct EventDetailView: View {
             .foregroundStyle(.white)
             .background(
                 LinearGradient(
-                    colors: [PopioTheme.coral, PopioTheme.gold],
+                    colors: [PopioTheme.gold, PopioTheme.gold],
                     startPoint: .leading,
                     endPoint: .trailing
                 ),
@@ -392,7 +392,7 @@ struct EventDetailView: View {
                             .foregroundStyle(selectedTab == tab ? .white : PopioTheme.ink)
                             .padding(.horizontal, 14)
                             .frame(height: 34)
-                            .background(selectedTab == tab ? PopioTheme.coral : Color.white, in: Capsule())
+                            .background(selectedTab == tab ? PopioTheme.gold : Color.white, in: Capsule())
                             .overlay {
                                 Capsule()
                                     .stroke(selectedTab == tab ? .clear : PopioTheme.line, lineWidth: 1)
@@ -614,7 +614,7 @@ private struct EventLocationMapPreview: View {
             if let coordinate = event.coordinate {
                 Map(initialPosition: .region(region(for: coordinate))) {
                     Marker(event.title, coordinate: coordinate)
-                        .tint(PopioTheme.coral)
+                        .tint(PopioTheme.gold)
                 }
                 .mapStyle(.standard(elevation: .flat))
                 .allowsHitTesting(false)
@@ -622,7 +622,7 @@ private struct EventLocationMapPreview: View {
                 LinearGradient(
                     colors: [
                         PopioTheme.gold.opacity(0.22),
-                        PopioTheme.coral.opacity(0.16)
+                        PopioTheme.gold.opacity(0.16)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -642,7 +642,7 @@ private struct EventLocationMapPreview: View {
 
             Image(systemName: "mappin.circle.fill")
                 .font(PopioFont.custom(size: 34, weight: .semibold))
-                .foregroundStyle(PopioTheme.coral)
+                .foregroundStyle(PopioTheme.gold)
                 .shadow(color: Color.white.opacity(0.9), radius: 4)
                 .allowsHitTesting(false)
         }
@@ -666,7 +666,7 @@ private struct EventDetailFact: View {
         VStack(alignment: .leading, spacing: 6) {
             Image(systemName: systemImage)
                 .font(PopioFont.custom(size: 18, weight: .medium))
-                .foregroundStyle(PopioTheme.coral)
+                .foregroundStyle(PopioTheme.gold)
 
             Text(title)
                 .font(PopioFont.custom(size: 12.5, weight: .semibold))
@@ -830,7 +830,7 @@ private struct ChatMessageBubble: View {
         if isCurrentUser {
             return AnyShapeStyle(
                 LinearGradient(
-                    colors: [PopioTheme.coral, PopioTheme.gold],
+                    colors: [PopioTheme.gold, PopioTheme.gold],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -872,7 +872,7 @@ private struct ChatInputBar: View {
                         LinearGradient(
                             colors: isSendDisabled
                                 ? [PopioTheme.muted.opacity(0.38), PopioTheme.muted.opacity(0.28)]
-                                : [PopioTheme.coral, PopioTheme.gold],
+                                : [PopioTheme.gold, PopioTheme.gold],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -899,7 +899,7 @@ private struct ChatEmptyState: View {
                 .font(PopioFont.custom(size: 30, weight: .semibold))
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [PopioTheme.coral, PopioTheme.gold],
+                        colors: [PopioTheme.gold, PopioTheme.gold],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -953,7 +953,7 @@ private struct PictureComposerCard: View {
                     VStack(spacing: 10) {
                         Image(systemName: "photo.badge.plus")
                             .font(PopioFont.custom(size: 30, weight: .semibold))
-                            .foregroundStyle(PopioTheme.coral)
+                            .foregroundStyle(PopioTheme.gold)
 
                         Text("Choose a picture")
                             .font(PopioFont.subheadline(.bold))
@@ -964,7 +964,7 @@ private struct PictureComposerCard: View {
                     .background(Color.white.opacity(0.76), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(PopioTheme.coral.opacity(0.32), style: StrokeStyle(lineWidth: 1, dash: [6]))
+                            .stroke(PopioTheme.gold.opacity(0.32), style: StrokeStyle(lineWidth: 1, dash: [6]))
                     }
                 }
                 .buttonStyle(.plain)
@@ -1020,7 +1020,7 @@ private struct ComposerHeader: View {
                 .frame(width: 32, height: 32)
                 .background(
                     LinearGradient(
-                        colors: [PopioTheme.coral, PopioTheme.gold],
+                        colors: [PopioTheme.gold, PopioTheme.gold],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),

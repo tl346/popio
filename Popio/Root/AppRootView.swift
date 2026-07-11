@@ -137,7 +137,7 @@ private enum LeaderboardPalette {
     static let background = PopioTheme.background
     static let ink = PopioTheme.ink
     static let muted = PopioTheme.muted
-    static let orange = PopioTheme.coral
+    static let orange = PopioTheme.gold
     static let gold = PopioTheme.gold
     static let silver = PopioTheme.accent
     static let bronze = PopioTheme.coral.opacity(0.86)
@@ -652,7 +652,7 @@ private struct PopUpRequestsView: View {
                     Label("Reject", systemImage: "xmark.circle.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .popioSecondaryButton(tint: PopioTheme.coral)
+                .popioSecondaryButton(tint: PopioTheme.gold)
 
                 Button {
                     session.reviewEvent(event, status: .approved, comment: reviewComments[event.id, default: ""])
@@ -719,7 +719,7 @@ private struct PopUpRequestsView: View {
                     Label("Reject", systemImage: "xmark.circle.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .popioSecondaryButton(tint: PopioTheme.coral)
+                .popioSecondaryButton(tint: PopioTheme.gold)
 
                 Button {
                     session.reviewContribution(

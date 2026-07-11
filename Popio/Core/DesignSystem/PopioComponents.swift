@@ -77,11 +77,11 @@ struct CategoryBadge: View {
             .font(PopioFont.caption2(.heavy))
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .foregroundStyle(.white)
-            .background(color, in: Capsule())
+            .foregroundStyle(color)
+            .background(color.opacity(0.08), in: Capsule())
             .overlay {
                 Capsule()
-                    .stroke(.white.opacity(0.35), lineWidth: 1)
+                    .stroke(color.opacity(0.26), lineWidth: 1)
             }
     }
 
@@ -106,10 +106,10 @@ struct RemoteImagePlaceholder: View {
         ZStack {
             LinearGradient(
                 colors: [
-                    PopioTheme.coral.opacity(0.92),
                     PopioTheme.gold.opacity(0.84),
+                    PopioTheme.gold.opacity(0.74),
                     PopioTheme.accent.opacity(0.72),
-                    PopioTheme.coral.opacity(0.78)
+                    PopioTheme.coral.opacity(0.34)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -185,8 +185,8 @@ struct ProfileAvatarView: View {
         ZStack {
             LinearGradient(
                 colors: [
-                    PopioTheme.coral,
                     PopioTheme.gold,
+                    PopioTheme.gold.opacity(0.82),
                     PopioTheme.coralSoft
                 ],
                 startPoint: .topLeading,
@@ -386,11 +386,11 @@ struct LikeButton: View {
                     .font(size.font)
                     .monospacedDigit()
             }
-            .foregroundStyle(isLiked ? PopioTheme.coral : PopioTheme.muted)
+            .foregroundStyle(isLiked ? PopioTheme.gold : PopioTheme.muted)
             .padding(.horizontal, size.horizontalPadding)
             .padding(.vertical, size.verticalPadding)
             .background(
-                (isLiked ? PopioTheme.coral.opacity(0.18) : PopioTheme.surface.opacity(0.72)),
+                (isLiked ? PopioTheme.gold.opacity(0.18) : PopioTheme.surface.opacity(0.72)),
                 in: Capsule()
             )
         }
@@ -439,7 +439,7 @@ struct EmptyStateView: View {
                     LinearGradient(
                         colors: [
                             PopioTheme.gold.opacity(0.18),
-                            PopioTheme.coral.opacity(0.10)
+                            PopioTheme.accent.opacity(0.10)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -532,11 +532,11 @@ extension View {
         modifier(PopioCardModifier(cornerRadius: cornerRadius, padding: padding))
     }
 
-    func popioPrimaryButton(tint: Color = PopioTheme.accent) -> some View {
+    func popioPrimaryButton(tint: Color = PopioTheme.gold) -> some View {
         modifier(PopioPrimaryButtonModifier(tint: tint))
     }
 
-    func popioSecondaryButton(tint: Color = PopioTheme.accent) -> some View {
+    func popioSecondaryButton(tint: Color = PopioTheme.gold) -> some View {
         modifier(PopioSecondaryButtonModifier(tint: tint))
     }
 
