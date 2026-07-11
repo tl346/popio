@@ -1,0 +1,48 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read: if true;
+
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.id == userId;
+
+      allow update: if request.auth != null
+        && request.auth.uid == userId;
+
+      allow delete: if false;
+    }
+
+    match /events/{eventId} {
+      allow read: if true;
+
+      allow create: if request.auth != null
+        && request.resource.data.id == eventId
+        && request.resource.data.createdByUserID == request.auth.uid;
+
+      allow update: if request.auth != null
+        && resource.data.createdByUserID == request.auth.uid;
+
+      allow delete: if false;
+    }
+
+    match /friendRequests/{requestId} {
+      allow read: if request.auth != null
+        && (resource.data.fromUserID == request.auth.uid
+          || resource.data.toUserID == request.auth.uid);
+
+      allow create: if request.auth != null
+        && request.resource.data.id == requestId
+        && request.resource.data.fromUserID == request.auth.uid
+        && request.resource.data.status == "pending";
+
+      allow update: if request.auth != null
+        && (resource.data.fromUserID == request.auth.uid
+          || resource.data.toUserID == request.auth.uid);
+
+      allow delete: if false;
+    }
+  }
+}
