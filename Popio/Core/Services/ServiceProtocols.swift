@@ -34,4 +34,5 @@ protocol ImageStorageServicing {
     func uploadProfileImage(data: Data, userID: String) async throws -> URL
     func uploadEventImage(data: Data, eventID: String) async throws -> URL
     func uploadMenuImage(data: Data, eventID: String) async throws -> URL
+    func uploadContributionImage(data: Data, contributionID: String) async throws -> URL
 }

@@ -20,6 +20,10 @@ struct FirebaseImageStorageService: ImageStorageServicing {
         try await upload(data: data, path: "menuImages/\(eventID).jpg")
     }
 
+    func uploadContributionImage(data: Data, contributionID: String) async throws -> URL {
+        try await upload(data: data, path: "eventContributionImages/\(contributionID).jpg")
+    }
+
     private func upload(data: Data, path: String) async throws -> URL {
         let reference = storage.reference().child(path)
         let metadata = StorageMetadata()

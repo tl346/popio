@@ -199,12 +199,10 @@ private struct FeedFilterBar: View {
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .radius:
-                MiniMenuSheet(title: "Radius") {
-                    RadiusSliderMenu(radiusOption: $radiusOption) {
-                        activeSheet = nil
-                    }
+                RadiusSliderMenu(radiusOption: $radiusOption) {
+                    activeSheet = nil
                 }
-                .presentationDetents([.height(260)])
+                .presentationDetents([.height(205)])
                 .presentationDragIndicator(.hidden)
             case .category:
                 MiniMenuSheet(title: "Category") {
@@ -212,7 +210,7 @@ private struct FeedFilterBar: View {
                         activeSheet = nil
                     }
                 }
-                .presentationDetents([.height(310)])
+                .presentationDetents([.height(270)])
                 .presentationDragIndicator(.hidden)
             }
         }
@@ -235,30 +233,27 @@ private struct CategoryChipMenu: View {
     @Binding var selectedCategories: Set<EventCategory>
     let done: () -> Void
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 112), spacing: 8)
-    ]
-
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Button {
-                selectedCategories.removeAll()
-            } label: {
-                Label("All Categories", systemImage: "square.grid.2x2")
-                    .font(PopioFont.custom(size: 12, weight: .medium))
-                    .foregroundStyle(selectedCategories.isEmpty ? PopioTheme.gold : PopioTheme.ink)
-                    .lineLimit(1)
-                    .padding(.horizontal, 10)
-                    .frame(height: 34)
-                    .background(selectedCategories.isEmpty ? PopioTheme.gold.opacity(0.10) : PopioTheme.surface, in: Capsule())
-                    .overlay {
-                        Capsule()
-                            .stroke(selectedCategories.isEmpty ? PopioTheme.gold.opacity(0.68) : PopioTheme.line, lineWidth: 1)
-                    }
-            }
-            .buttonStyle(.plain)
+            FeedChipFlowLayout(spacing: 6, rowSpacing: 6) {
+                Button {
+                    selectedCategories.removeAll()
+                } label: {
+                    Label("All", systemImage: "square.grid.2x2")
+                        .font(PopioFont.custom(size: 12, weight: .medium))
+                        .foregroundStyle(selectedCategories.isEmpty ? PopioTheme.gold : PopioTheme.ink)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, 10)
+                        .frame(height: 34)
+                        .background(selectedCategories.isEmpty ? PopioTheme.gold.opacity(0.10) : PopioTheme.surface, in: Capsule())
+                        .overlay {
+                            Capsule()
+                                .stroke(selectedCategories.isEmpty ? PopioTheme.gold.opacity(0.68) : PopioTheme.line, lineWidth: 1)
+                        }
+                }
+                .buttonStyle(.plain)
 
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
                 ForEach(EventCategory.allCases) { category in
                     Button {
                         if selectedCategories.contains(category) {
@@ -312,49 +307,48 @@ private struct RadiusSliderMenu: View {
     private var sliderValue: Binding<Double> {
         Binding(
             get: {
-                Double(options.firstIndex(of: radiusOption ?? .ten) ?? 1)
+                guard let radiusOption else { return 0 }
+                return Double((options.firstIndex(of: radiusOption) ?? 0) + 1)
             },
             set: { newValue in
                 let index = Int(newValue.rounded())
-                radiusOption = options[min(max(index, 0), options.count - 1)]
+                if index == 0 {
+                    radiusOption = nil
+                } else {
+                    radiusOption = options[min(max(index - 1, 0), options.count - 1)]
+                }
             }
         )
     }
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 16) {
+            Capsule()
+                .fill(PopioTheme.ink.opacity(0.14))
+                .frame(width: 42, height: 5)
+
             HStack {
-                Label(radiusOption.map { "\(Int($0.rawValue)) miles" } ?? "No radius", systemImage: "location.circle.fill")
+                Label(radiusOption.map { "Within \(Int($0.rawValue)) miles" } ?? "Any distance", systemImage: "location.circle.fill")
                     .font(PopioFont.custom(size: 16, weight: .semibold))
                     .foregroundStyle(PopioTheme.ink)
 
                 Spacer()
             }
 
-            Button {
-                radiusOption = nil
-            } label: {
-                HStack {
-                    Text("No radius")
-                    Spacer()
-                    Image(systemName: radiusOption == nil ? "checkmark.circle.fill" : "circle")
-                }
-                .font(PopioFont.custom(size: 14, weight: .semibold))
-                .foregroundStyle(radiusOption == nil ? PopioTheme.accent : PopioTheme.ink)
-                .padding(.horizontal, 12)
-                .frame(height: 42)
-                .background(radiusOption == nil ? PopioTheme.accent.opacity(0.12) : Color.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-            .buttonStyle(.plain)
-
             Slider(
                 value: sliderValue,
-                in: 0...Double(options.count - 1),
+                in: 0...Double(options.count),
                 step: 1
             )
             .tint(PopioTheme.accent)
 
             HStack {
+                Text("Any")
+                    .font(PopioFont.custom(size: 11, weight: .semibold))
+                    .foregroundStyle(radiusOption == nil ? PopioTheme.accent : PopioTheme.muted)
+
+                Spacer()
+
                 ForEach(options) { option in
                     Text("\(Int(option.rawValue))")
                         .font(PopioFont.custom(size: 11, weight: .semibold))
@@ -376,12 +370,82 @@ private struct RadiusSliderMenu: View {
             .background(PopioTheme.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .buttonStyle(.plain)
         }
-        .padding(16)
-        .background(Color.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(PopioTheme.accent.opacity(0.18), lineWidth: 1)
+        .padding(.horizontal, 18)
+        .padding(.top, 14)
+        .padding(.bottom, 18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.white.ignoresSafeArea())
+    }
+}
+
+private struct FeedChipFlowLayout: Layout {
+    var spacing: CGFloat = 6
+    var rowSpacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        let rows = rows(in: maxWidth, subviews: subviews)
+        let width = rows.map(\.width).max() ?? 0
+        let height = rows.reduce(CGFloat.zero) { total, row in
+            total + row.height
+        } + CGFloat(max(0, rows.count - 1)) * rowSpacing
+
+        return CGSize(width: proposal.width ?? width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let rows = rows(in: bounds.width, subviews: subviews)
+        var y = bounds.minY
+
+        for row in rows {
+            var x = bounds.minX
+
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(
+                    at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
+                    proposal: ProposedViewSize(size)
+                )
+                x += size.width + spacing
+            }
+
+            y += row.height + rowSpacing
         }
+    }
+
+    private func rows(in maxWidth: CGFloat, subviews: Subviews) -> [FlowRow] {
+        var rows: [FlowRow] = []
+        var currentIndices: [Subviews.Index] = []
+        var currentWidth: CGFloat = 0
+        var currentHeight: CGFloat = 0
+
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            let proposedWidth = currentIndices.isEmpty ? size.width : currentWidth + spacing + size.width
+
+            if proposedWidth > maxWidth, !currentIndices.isEmpty {
+                rows.append(FlowRow(indices: currentIndices, width: currentWidth, height: currentHeight))
+                currentIndices = [index]
+                currentWidth = size.width
+                currentHeight = size.height
+            } else {
+                currentIndices.append(index)
+                currentWidth = proposedWidth
+                currentHeight = max(currentHeight, size.height)
+            }
+        }
+
+        if !currentIndices.isEmpty {
+            rows.append(FlowRow(indices: currentIndices, width: currentWidth, height: currentHeight))
+        }
+
+        return rows
+    }
+
+    private struct FlowRow {
+        let indices: [Subviews.Index]
+        let width: CGFloat
+        let height: CGFloat
     }
 }
 
@@ -690,7 +754,7 @@ struct EventMapView: View {
                             .shadow(color: PopioTheme.shadow.opacity(0.5), radius: 16, x: 0, y: 8)
                         }
                         .buttonStyle(.plain)
-                        .padding(.bottom, 78)
+                        .padding(.bottom, collapsedMapControlBottomPadding)
                         .offset(y: -keyboardBottomPadding)
                         .accessibilityLabel("Show nearby pop-ups")
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -770,7 +834,11 @@ struct EventMapView: View {
     }
 
     private var recenterButtonBottomPadding: CGFloat {
-        78 + keyboardBottomPadding
+        collapsedMapControlBottomPadding + keyboardBottomPadding
+    }
+
+    private var collapsedMapControlBottomPadding: CGFloat {
+        62
     }
 
     private func updateKeyboardHeight(from notification: Notification) {
@@ -1012,18 +1080,13 @@ private struct MapEventCarousel: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 10) {
                         ForEach(events) { event in
-                            NavigationLink(value: event) {
-                                MapCarouselCard(
-                                    event: event,
-                                    isSelected: selectedEventID == event.id
-                                )
-                            }
-                            .simultaneousGesture(
-                                TapGesture().onEnded {
+                            MapCarouselCard(
+                                event: event,
+                                isSelected: selectedEventID == event.id,
+                                selectEvent: {
                                     selectEvent(event)
                                 }
                             )
-                            .buttonStyle(.plain)
                         }
                     }
                     .padding(.horizontal, 14)
@@ -1032,7 +1095,7 @@ private struct MapEventCarousel: View {
             }
 
             Color.clear
-                .frame(height: reservesBottomBarSpace ? 70 : 0)
+                .frame(height: reservesBottomBarSpace ? 4 : 0)
         }
         .padding(.top, 6)
         .background {
@@ -1046,59 +1109,113 @@ private struct MapEventCarousel: View {
 private struct MapCarouselCard: View {
     let event: PopioEvent
     let isSelected: Bool
+    let selectEvent: () -> Void
+    @EnvironmentObject private var session: AppSession
+    @State private var heartPulse = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            EventBannerImageView(event: event)
-                .frame(maxWidth: .infinity)
-                .frame(height: 96)
-                .clipped()
+            NavigationLink(value: event) {
+                VStack(alignment: .leading, spacing: 0) {
+                    imageSection
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(event.title)
-                    .font(PopioFont.custom(size: 14.5, weight: .semibold))
-                    .foregroundStyle(PopioTheme.ink)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(event.title)
+                            .font(PopioFont.custom(size: 14.5, weight: .semibold))
+                            .foregroundStyle(PopioTheme.ink)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    EventCardMetaRow(systemImage: "calendar", text: eventTimeText)
-                    EventCardMetaRow(systemImage: "mappin", text: locationText)
+                        EventCategoryBadge(category: event.category.rawValue)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            EventCardMetaRow(systemImage: "mappin", text: locationText)
+                            if let eventTimeText {
+                                EventCardMetaRow(systemImage: "clock", text: eventTimeText)
+                            }
+                        }
+                        .padding(.top, 1)
+                        .padding(.trailing, 34)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.top, 8)
+                    .padding(.bottom, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-
-                EventCardTagRow(tags: cardTags)
-
-                Spacer(minLength: 0)
+                .contentShape(Rectangle())
             }
-            .padding(10)
+            .simultaneousGesture(TapGesture().onEnded(selectEvent))
+            .buttonStyle(.plain)
         }
-        .frame(width: 160, height: 190)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .frame(width: 160)
+        .background(Color.white)
+        .clipShape(Rectangle())
+        .overlay(alignment: .bottomTrailing) {
+            Button {
+                withAnimation(.spring(response: 0.22, dampingFraction: 0.42)) {
+                    heartPulse = true
+                }
+                session.toggleLike(for: event)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                    withAnimation(.spring(response: 0.22, dampingFraction: 0.72)) {
+                        heartPulse = false
+                    }
+                }
+            } label: {
+                Image(systemName: session.isLikedByCurrentUser(event) ? "heart.fill" : "heart")
+                    .font(PopioFont.custom(size: 16, weight: .semibold))
+                    .foregroundStyle(session.isLikedByCurrentUser(event) ? PopioTheme.coral : PopioTheme.ink.opacity(0.72))
+                    .frame(width: 34, height: 34)
+                    .contentShape(Circle())
+                    .scaleEffect(heartPulse ? 1.18 : 1)
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 8)
+            .padding(.bottom, 10)
+        }
         .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            Rectangle()
                 .stroke(isSelected ? PopioTheme.gold : PopioTheme.line.opacity(0.85), lineWidth: isSelected ? 2 : 1)
         }
         .shadow(color: PopioTheme.shadow.opacity(0.12), radius: 14, y: 7)
     }
 
-    private var eventTimeText: String {
-        let date = event.eventDate.formatted(.dateTime.month(.abbreviated).day())
+    private var imageSection: some View {
+        ZStack(alignment: .topLeading) {
+            EventBannerImageView(event: event)
+                .frame(width: 160, height: 160)
+                .clipped()
 
+            Text(datePillText)
+                .font(PopioFont.custom(size: 10.5, weight: .semibold))
+                .foregroundStyle(Color.black)
+                .lineLimit(1)
+                .padding(.horizontal, 9)
+                .frame(height: 25)
+                .background(Color(red: 0.90, green: 0.84, blue: 1.00), in: Capsule())
+                .padding(8)
+        }
+    }
+
+    private var datePillText: String {
+        event.eventDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+    }
+
+    private var eventTimeText: String? {
         switch (event.startTime, event.endTime) {
         case let (start?, end?):
-            return "\(date) · \(start.formatted(date: .omitted, time: .shortened))-\(end.formatted(date: .omitted, time: .shortened))"
+            return "\(start.formatted(date: .omitted, time: .shortened))-\(end.formatted(date: .omitted, time: .shortened))"
         case let (start?, nil):
-            return "\(date) · \(start.formatted(date: .omitted, time: .shortened))"
+            return start.formatted(date: .omitted, time: .shortened)
         case let (nil, end?):
-            return "\(date) · Ends \(end.formatted(date: .omitted, time: .shortened))"
+            return "Ends \(end.formatted(date: .omitted, time: .shortened))"
         case (nil, nil):
-            return date
+            return nil
         }
     }
 
     private var locationText: String {
-        "\(String(format: "%.1f", event.distanceInMiles)) mi · \(shortLocation)"
+        shortLocation
     }
 
     private var shortLocation: String {
@@ -1108,16 +1225,6 @@ private struct MapCarouselCard: View {
         return parts.dropFirst().first ?? parts.first ?? event.address
     }
 
-    private var cardTags: [String] {
-        let baseTags = [event.category.rawValue] + event.tags
-        let tags = event.hasMenuImage ? baseTags + ["Menu"] : baseTags
-        return tags.reduce(into: [String]()) { uniqueTags, tag in
-            guard !uniqueTags.contains(tag) else { return }
-            uniqueTags.append(tag)
-        }
-        .prefix(2)
-        .map(\.self)
-    }
 }
 
 private struct FilterPill: View {
@@ -1138,25 +1245,19 @@ private struct FilterPill: View {
             }
         }
         .font(PopioFont.caption(.bold))
-        .foregroundStyle(PopioTheme.ink)
+        .foregroundStyle(isActive ? Color.white : PopioTheme.ink)
         .padding(.horizontal, 12)
         .frame(height: 32)
         .background(activeBackground, in: Capsule())
         .overlay {
             Capsule()
-                .stroke(isActive ? tint.opacity(0.38) : PopioTheme.line, lineWidth: 1)
+                .stroke(isActive ? tint : PopioTheme.line, lineWidth: 1)
         }
     }
 
     private var activeBackground: some ShapeStyle {
         if isActive {
-            return AnyShapeStyle(
-                LinearGradient(
-                    colors: [tint.opacity(0.24), tint.opacity(0.14)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+            return AnyShapeStyle(tint)
         }
 
         return AnyShapeStyle(PopioTheme.backgroundElevated)
@@ -1167,62 +1268,112 @@ struct EventCardView: View {
     let event: PopioEvent
     let distance: Double
     @ObservedObject var session: AppSession
+    @State private var heartPulse = false
 
     var body: some View {
-        NavigationLink(value: EventFeedRoute.detail(event)) {
-            VStack(alignment: .leading, spacing: 0) {
-                EventBannerImageView(event: event)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 96)
-                    .clipped()
+        VStack(alignment: .leading, spacing: 0) {
+            NavigationLink(value: EventFeedRoute.detail(event)) {
+                VStack(alignment: .leading, spacing: 0) {
+                    imageSection
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(event.title)
-                        .font(PopioFont.custom(size: 14.5, weight: .semibold))
-                        .foregroundStyle(PopioTheme.ink)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(event.title)
+                            .font(PopioFont.custom(size: 15, weight: .semibold))
+                            .foregroundStyle(PopioTheme.ink)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        EventCardMetaRow(systemImage: "calendar", text: eventDateText)
-                        EventCardMetaRow(systemImage: "mappin", text: locationText)
+                        EventCategoryBadge(category: event.category.rawValue)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            EventCardMetaRow(systemImage: "mappin", text: locationText)
+                            if let eventTimeText {
+                                EventCardMetaRow(systemImage: "clock", text: eventTimeText)
+                            }
+                        }
+                        .padding(.top, 1)
+                        .padding(.trailing, 34)
                     }
-
-                    EventCardTagRow(tags: cardTags)
-
-                    Spacer(minLength: 0)
+                    .padding(.horizontal, 10)
+                    .padding(.top, 8)
+                    .padding(.bottom, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(10)
+                .contentShape(Rectangle())
             }
-            .frame(height: 190)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(PopioTheme.line.opacity(0.85), lineWidth: 1)
-            }
-            .shadow(color: PopioTheme.shadow.opacity(0.12), radius: 14, y: 7)
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .background(Color.white)
+        .clipShape(Rectangle())
+        .overlay(alignment: .bottomTrailing) {
+            Button {
+                withAnimation(.spring(response: 0.22, dampingFraction: 0.42)) {
+                    heartPulse = true
+                }
+                session.toggleLike(for: event)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                    withAnimation(.spring(response: 0.22, dampingFraction: 0.72)) {
+                        heartPulse = false
+                    }
+                }
+            } label: {
+                Image(systemName: session.isLikedByCurrentUser(event) ? "heart.fill" : "heart")
+                    .font(PopioFont.custom(size: 16, weight: .semibold))
+                    .foregroundStyle(session.isLikedByCurrentUser(event) ? PopioTheme.coral : PopioTheme.ink.opacity(0.72))
+                    .frame(width: 34, height: 34)
+                    .contentShape(Circle())
+                    .scaleEffect(heartPulse ? 1.18 : 1)
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 8)
+            .padding(.bottom, 10)
+        }
+        .overlay {
+            Rectangle()
+                .stroke(PopioTheme.line.opacity(0.85), lineWidth: 1)
+        }
+        .shadow(color: PopioTheme.shadow.opacity(0.12), radius: 14, y: 7)
     }
 
-    private var eventDateText: String {
-        let date = event.eventDate.formatted(.dateTime.month(.abbreviated).day())
+    private var imageSection: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .topLeading) {
+                EventBannerImageView(event: event)
+                    .frame(width: proxy.size.width, height: proxy.size.width)
+                    .clipped()
 
+                Text(datePillText)
+                    .font(PopioFont.custom(size: 10.5, weight: .semibold))
+                    .foregroundStyle(Color.black)
+                    .lineLimit(1)
+                    .padding(.horizontal, 9)
+                    .frame(height: 25)
+                    .background(Color(red: 0.90, green: 0.84, blue: 1.00), in: Capsule())
+                    .padding(8)
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+    }
+
+    private var datePillText: String {
+        event.eventDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+    }
+
+    private var eventTimeText: String? {
         switch (event.startTime, event.endTime) {
         case let (start?, end?):
-            return "\(date) · \(start.formatted(date: .omitted, time: .shortened))-\(end.formatted(date: .omitted, time: .shortened))"
+            return "\(start.formatted(date: .omitted, time: .shortened))-\(end.formatted(date: .omitted, time: .shortened))"
         case let (start?, nil):
-            return "\(date) · \(start.formatted(date: .omitted, time: .shortened))"
+            return start.formatted(date: .omitted, time: .shortened)
         case let (nil, end?):
-            return "\(date) · Ends \(end.formatted(date: .omitted, time: .shortened))"
+            return "Ends \(end.formatted(date: .omitted, time: .shortened))"
         case (nil, nil):
-            return date
+            return nil
         }
     }
 
     private var locationText: String {
-        "\(String(format: "%.1f", distance)) mi · \(shortLocation)"
+        shortLocation
     }
 
     private var shortLocation: String {
@@ -1230,17 +1381,6 @@ struct EventCardView: View {
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         return parts.dropFirst().first ?? parts.first ?? event.address
-    }
-
-    private var cardTags: [String] {
-        let baseTags = [event.category.rawValue] + event.tags
-        let tags = event.hasMenuImage ? baseTags + ["Menu"] : baseTags
-        return tags.reduce(into: [String]()) { uniqueTags, tag in
-            guard !uniqueTags.contains(tag) else { return }
-            uniqueTags.append(tag)
-        }
-        .prefix(2)
-        .map(\.self)
     }
 }
 
@@ -1261,6 +1401,20 @@ private struct EventCardMetaRow: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
         }
+    }
+}
+
+private struct EventCategoryBadge: View {
+    let category: String
+
+    var body: some View {
+        Text(category)
+            .font(PopioFont.custom(size: 9.5, weight: .semibold))
+            .foregroundStyle(PopioTheme.gold)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .frame(height: 21)
+            .background(PopioTheme.gold.opacity(0.14), in: Capsule())
     }
 }
 

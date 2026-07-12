@@ -26,13 +26,22 @@ struct MainTabView: View {
     @StateObject private var eventFeedViewModel = EventFeedViewModel()
     @State private var selectedTab: MainTab = .popUps
     @State private var isShowingCreateEvent = false
+    @State private var popUpsNavigationResetID = UUID()
 
     var body: some View {
         currentTabView
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 CompactTabBar(
-                    selectedTab: $selectedTab,
+                    selectedTab: Binding(
+                        get: { selectedTab },
+                        set: { newTab in
+                            if newTab == .popUps {
+                                popUpsNavigationResetID = UUID()
+                            }
+                            selectedTab = newTab
+                        }
+                    ),
                     currentUser: session.currentUser,
                     isAdmin: session.currentUser?.isAdmin == true,
                     addAction: {
@@ -52,6 +61,7 @@ struct MainTabView: View {
         switch selectedTab {
         case .popUps:
             EventFeedView(viewModel: eventFeedViewModel)
+                .id(popUpsNavigationResetID)
         case .map:
             PopUpsMapPage(viewModel: eventFeedViewModel)
         case .mvps:
@@ -451,7 +461,7 @@ private enum MainTab: CaseIterable, Hashable {
         case .popUps:
             return "storefront"
         case .map:
-            return "map"
+            return "mappin"
         case .mvps:
             return "trophy"
         case .popUpRequests:
@@ -480,34 +490,17 @@ private struct CompactTabBar: View {
             tabButton(.profile)
         }
         .padding(.horizontal, 9)
-        .padding(.top, 3)
+        .padding(.top, 1)
         .padding(.bottom, 0)
-        .offset(y: 6)
+        .offset(y: 3)
         .background {
-            LinearGradient(
-                colors: [
-                    PopioTheme.surface,
-                    PopioTheme.gold.opacity(0.16),
-                    PopioTheme.background
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .background(Color.white)
-            .ignoresSafeArea(.container, edges: .bottom)
+            Color.white
+                .ignoresSafeArea(.container, edges: .bottom)
         }
         .overlay(alignment: .top) {
-            LinearGradient(
-                colors: [
-                    Color.white.opacity(0),
-                    Color.white.opacity(0.42),
-                    Color.white.opacity(0.92)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 30)
-            .offset(y: -30)
+            Rectangle()
+                .fill(Color.white.opacity(0.001))
+                .frame(height: 1)
             .allowsHitTesting(false)
         }
     }

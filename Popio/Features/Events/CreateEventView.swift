@@ -131,7 +131,7 @@ struct CreateEventView: View {
     }
 
     private var eventNameAndPhotoSection: some View {
-        HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             PhotosPicker(selection: $selectedEventPhoto, matching: .images) {
                 ZStack {
                     Group {
@@ -146,8 +146,8 @@ struct CreateEventView: View {
                             RemoteImagePlaceholder(category: category)
                         }
                     }
-                    .frame(width: 112, height: 67)
-                    .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                    .frame(width: 232, height: 232)
+                    .clipped()
 
                     Image(systemName: "camera.fill")
                         .font(PopioFont.custom(size: 20, weight: .medium))
@@ -155,6 +155,13 @@ struct CreateEventView: View {
                         .frame(width: 42, height: 42)
                         .background(.black.opacity(0.35), in: Circle())
                 }
+                .frame(width: 232, height: 232)
+                .background(PopioTheme.surface)
+                .overlay {
+                    Rectangle()
+                        .stroke(PopioTheme.line, lineWidth: 1)
+                }
+                .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(eventImageData == nil ? "Add event image" : "Change event image")
@@ -162,17 +169,19 @@ struct CreateEventView: View {
             VStack(alignment: .leading, spacing: 7) {
                 CreateFormLabel("Event Name", isRequired: true)
 
-                TextField("e.g., Sunset Coffee Pop-Up", text: $title)
-                    .textInputAutocapitalization(.words)
-                    .font(PopioFont.custom(size: 14, weight: .regular))
-                    .foregroundStyle(PopioTheme.ink)
-                    .padding(.horizontal, 12)
-                    .frame(minHeight: 44)
-                    .background(PopioTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(PopioTheme.line, lineWidth: 1)
-                    }
+                HStack(spacing: 9) {
+                    TextField("e.g., Sunset Coffee Pop-Up", text: $title)
+                        .textInputAutocapitalization(.words)
+                        .foregroundStyle(PopioTheme.ink)
+                }
+                .font(PopioFont.subheadline())
+                .padding(.horizontal, 12)
+                .frame(minHeight: 46)
+                .background(PopioTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(PopioTheme.line, lineWidth: 1)
+                }
 
                 Text("\(title.count)/80")
                     .font(PopioFont.caption(.medium))
@@ -298,13 +307,15 @@ struct CreateEventView: View {
                 CreateOptionalTimeField(
                     title: "Start time",
                     date: $startTime,
-                    isExpanded: $isStartTimePickerExpanded
+                    isExpanded: $isStartTimePickerExpanded,
+                    placeholder: "Required"
                 )
 
                 CreateOptionalTimeField(
                     title: "End time",
                     date: $endTime,
-                    isExpanded: $isEndTimePickerExpanded
+                    isExpanded: $isEndTimePickerExpanded,
+                    placeholder: "Optional"
                 )
             }
         }
@@ -505,12 +516,19 @@ struct CreateEventView: View {
             )
         }
         .buttonStyle(.plain)
-        .disabled(isPublishing || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        .opacity(isPublishing || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.55 : 1)
+        .disabled(isPublishDisabled)
+        .opacity(isPublishDisabled ? 0.55 : 1)
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 8)
         .background(.ultraThinMaterial)
+    }
+
+    private var isPublishDisabled: Bool {
+        isPublishing
+            || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || startTime == nil
     }
 
     private var hostName: String {
@@ -532,6 +550,10 @@ struct CreateEventView: View {
 
     private func publish() async {
         errorMessage = nil
+        guard startTime != nil else {
+            errorMessage = "Start time is required."
+            return
+        }
         isPublishing = true
 
         do {
@@ -715,6 +737,7 @@ private struct CreateOptionalTimeField: View {
     let title: String
     @Binding var date: Date?
     @Binding var isExpanded: Bool
+    var placeholder = "Optional"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -774,7 +797,7 @@ private struct CreateOptionalTimeField: View {
     }
 
     private var dateText: String {
-        guard let date else { return "Optional" }
+        guard let date else { return placeholder }
         return date.formatted(.dateTime.hour().minute())
     }
 

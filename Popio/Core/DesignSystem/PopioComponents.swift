@@ -89,20 +89,9 @@ struct MiniMenuSheet<Content: View>: View {
         }
         .padding(.horizontal, 18)
         .padding(.top, 14)
-        .padding(.bottom, 24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(
-            LinearGradient(
-                colors: [
-                    PopioTheme.backgroundElevated,
-                    PopioTheme.gold.opacity(0.10),
-                    PopioTheme.coralSoft.opacity(0.30)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-        )
+        .padding(.bottom, 10)
+        .frame(maxWidth: .infinity, alignment: .top)
+        .background(Color.white.ignoresSafeArea())
     }
 }
 

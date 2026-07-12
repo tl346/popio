@@ -38,14 +38,14 @@ struct AuthenticationView: View {
     @ViewBuilder
     private var authContent: some View {
         if viewModel.isRegistering {
-            VStack(spacing: 0) {
-                Spacer(minLength: 8)
+            ScrollView {
                 authStack
-                Spacer(minLength: 10)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 26)
+                    .frame(maxWidth: 520)
+                    .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 28)
-            .frame(maxWidth: 520)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .scrollDismissesKeyboard(.interactively)
         } else {
             ScrollView {
                 authStack
@@ -59,7 +59,7 @@ struct AuthenticationView: View {
     }
 
     private var authStack: some View {
-        VStack(spacing: viewModel.isRegistering ? 14 : 28) {
+        VStack(spacing: viewModel.isRegistering ? 14 : 20) {
             header
             form
         }
@@ -247,8 +247,8 @@ struct AuthenticationView: View {
 private enum AuthPalette {
     static let background = LinearGradient(
         colors: [
-            PopioTheme.backgroundElevated,
-            PopioTheme.background
+            Color.white,
+            Color.white
         ],
         startPoint: .top,
         endPoint: .bottom
@@ -273,8 +273,9 @@ private struct AuthBrandHeader: View {
     var body: some View {
         Image("titlelogoimage")
             .resizable()
-            .scaledToFit()
-            .frame(width: 360)
+            .scaledToFill()
+            .frame(width: 320, height: 186)
+            .clipped()
             .accessibilityLabel("Popio")
     }
 }

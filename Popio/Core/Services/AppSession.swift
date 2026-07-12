@@ -687,8 +687,9 @@ extension AppSession {
     ) {
         guard let currentUser else { return }
 
+        let contributionID = UUID().uuidString
         let contribution = EventContribution(
-            id: UUID().uuidString,
+            id: contributionID,
             eventID: event.id,
             type: type,
             createdByUserID: currentUser.id,
@@ -707,7 +708,19 @@ extension AppSession {
 
         if let eventService {
             Task {
-                try? await eventService.createContribution(contribution)
+                var persistedContribution = contribution
+
+                if let imageData, FirebaseBootstrap.isConfigured {
+                    let imageURL = try? await FirebaseImageStorageService()
+                        .uploadContributionImage(data: imageData, contributionID: contributionID)
+                    persistedContribution.imageURL = imageURL
+
+                    if let index = eventContributions.firstIndex(where: { $0.id == contributionID }) {
+                        eventContributions[index].imageURL = imageURL
+                    }
+                }
+
+                try? await eventService.createContribution(persistedContribution)
             }
         }
     }
@@ -735,6 +748,13 @@ extension AppSession {
             updatedContributions[index].likedUserIDs.insert(currentUserID)
         }
         eventContributions = updatedContributions
+
+        if let eventService {
+            let contribution = updatedContributions[index]
+            Task {
+                try? await eventService.createContribution(contribution)
+            }
+        }
     }
 
     func isLikedByCurrentUser(_ contribution: EventContribution) -> Bool {
@@ -753,6 +773,13 @@ extension AppSession {
             updatedEvents[index].likedUserIDs.insert(currentUserID)
         }
         events = updatedEvents
+
+        if let eventService {
+            let event = updatedEvents[index]
+            Task {
+                try? await eventService.createEvent(event)
+            }
+        }
     }
 
     func isLikedByCurrentUser(_ event: PopioEvent) -> Bool {
@@ -771,6 +798,13 @@ extension AppSession {
             updatedEvents[index].goingUserIDs.insert(currentUserID)
         }
         events = updatedEvents
+
+        if let eventService {
+            let event = updatedEvents[index]
+            Task {
+                try? await eventService.createEvent(event)
+            }
+        }
     }
 
     func isGoingByCurrentUser(_ event: PopioEvent) -> Bool {

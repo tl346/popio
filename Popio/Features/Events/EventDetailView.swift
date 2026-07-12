@@ -11,6 +11,7 @@ struct EventDetailView: View {
     @State private var pictureData: Data?
     @State private var submissionMessage: String?
     @State private var isShowingMenu = false
+    @State private var heartPulse = false
 
     init(event: PopioEvent, opensChat: Bool = false) {
         self.event = event
@@ -18,49 +19,41 @@ struct EventDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 16) {
+                topControls
+                    .padding(.top, 8)
+
                 heroSection
 
-                VStack(alignment: .leading, spacing: 16) {
-                    summarySection
-                    eventFactsSection
-                    descriptionCallout
+                summarySection
+                eventFactsSection
+                descriptionCallout
+                tagsSection
 
-                    if currentEvent.hasMenuImage {
-                        menuButton
-                    }
+                if currentEvent.hasMenuImage {
+                    menuButton
+                }
 
-                    locationSection
-                    creatorSection
-                    actionSection
-                    communitySection
+                creatorSection
+
+                if !goingUsers.isEmpty {
+                    GoingUsersStack(users: goingUsers, totalCount: currentEvent.goingCount)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 34)
-                .padding(.bottom, 96)
-                .background(
-                    PopioTheme.background,
-                    in: UnevenRoundedRectangle(topLeadingRadius: 28, topTrailingRadius: 28)
-                )
-                .overlay(alignment: .topTrailing) {
-                    HStack(spacing: 10) {
-                        eventHeartButton
-                        eventShareButton
-                    }
-                        .padding(.trailing, 28)
-                        .offset(y: -27)
-                }
-                .offset(y: -28)
-                .padding(.bottom, -28)
+
+                communitySection
             }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 176)
         }
-        .ignoresSafeArea(edges: .top)
         .scrollIndicators(.hidden)
         .background(PopioTheme.background)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            bottomActionBar
+        }
         .onChange(of: selectedPicture) { _, newValue in
             guard let newValue else { return }
 
@@ -79,47 +72,61 @@ struct EventDetailView: View {
         ZStack(alignment: .topLeading) {
             EventBannerImageView(event: currentEvent)
                 .frame(maxWidth: .infinity)
-                .aspectRatio(5.0 / 3.0, contentMode: .fit)
+                .aspectRatio(1, contentMode: .fit)
                 .clipped()
 
-            LinearGradient(
-                colors: [
-                    Color.black.opacity(0.32),
-                    Color.black.opacity(0.08),
-                    Color.clear
-                ],
-                startPoint: .top,
-                endPoint: .center
-            )
-            .allowsHitTesting(false)
-
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(PopioFont.custom(size: 18, weight: .semibold))
-                    .foregroundStyle(PopioTheme.ink)
-                    .frame(width: 48, height: 48)
-                    .background(Color.white.opacity(0.96), in: Circle())
-                    .shadow(color: PopioTheme.shadow.opacity(0.18), radius: 12, y: 6)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Back")
-            .padding(.top, 56)
-            .padding(.leading, 18)
+            Text(dateBadgeText)
+                .font(PopioFont.custom(size: 13, weight: .semibold))
+                .foregroundStyle(Color.black)
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .frame(height: 34)
+                .background(Color(red: 0.90, green: 0.84, blue: 1.00), in: Capsule())
+                .padding(14)
         }
-        .aspectRatio(5.0 / 3.0, contentMode: .fit)
-        .ignoresSafeArea(edges: .top)
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(Rectangle())
+        .padding(.horizontal, 12)
         .sheet(isPresented: $isShowingMenu) {
             EventMenuSheet(event: currentEvent)
         }
     }
 
+    private var topControls: some View {
+        HStack(spacing: 12) {
+            Button {
+                dismiss()
+            } label: {
+                EventDetailCircleActionButton(systemImage: "chevron.left", foreground: PopioTheme.gold)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back")
+
+            Spacer()
+
+            eventHeartButton
+            eventShareButton
+        }
+    }
+
     private var eventHeartButton: some View {
         Button {
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.42)) {
+                heartPulse = true
+            }
             session.toggleLike(for: currentEvent)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                withAnimation(.spring(response: 0.22, dampingFraction: 0.72)) {
+                    heartPulse = false
+                }
+            }
         } label: {
-            EventDetailCircleActionButton(systemImage: session.isLikedByCurrentUser(currentEvent) ? "heart.fill" : "heart")
+            EventDetailCircleActionButton(
+                systemImage: session.isLikedByCurrentUser(currentEvent) ? "heart.fill" : "heart",
+                foreground: session.isLikedByCurrentUser(currentEvent) ? PopioTheme.coral : PopioTheme.ink,
+                background: .white
+            )
+            .scaleEffect(heartPulse ? 1.18 : 1)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(session.isLikedByCurrentUser(currentEvent) ? "Remove interest" : "Mark interested")
@@ -127,76 +134,63 @@ struct EventDetailView: View {
 
     private var eventShareButton: some View {
         ShareLink(item: shareText) {
-            EventDetailCircleActionButton(systemImage: "square.and.arrow.up")
+            EventDetailCircleActionButton(
+                systemImage: "square.and.arrow.up",
+                foreground: .black,
+                background: .white
+            )
         }
         .accessibilityLabel("Share event")
     }
 
     private var summarySection: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(currentEvent.title)
-                    .font(PopioFont.custom(size: 24, weight: .semibold))
-                    .foregroundStyle(PopioTheme.ink)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 9) {
+            Text(currentEvent.title)
+                .font(PopioFont.custom(size: 23, weight: .semibold))
+                .foregroundStyle(PopioTheme.ink)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
 
-                Label(currentEvent.address, systemImage: "mappin.circle.fill")
-                    .font(PopioFont.custom(size: 14, weight: .medium))
-                    .foregroundStyle(PopioTheme.muted)
-                    .lineLimit(2)
+            HStack(spacing: 8) {
+                EventDetailBadge(text: currentEvent.category.rawValue, tint: PopioTheme.gold)
 
-                Text(String(format: "%.1f mi away", currentEvent.distanceInMiles))
-                    .font(PopioFont.custom(size: 13, weight: .medium))
-                    .foregroundStyle(PopioTheme.muted)
+                if currentEvent.hasMenuImage {
+                    EventDetailBadge(text: "Menu", tint: PopioTheme.coral)
+                }
             }
-
-            Spacer(minLength: 0)
         }
     }
 
     private var eventFactsSection: some View {
-        let event = currentEvent
+        HStack(spacing: 10) {
+            Label(shortLocation, systemImage: "mappin.circle.fill")
+                .lineLimit(1)
 
-        return HStack(spacing: 0) {
-            EventDetailFact(
-                systemImage: "calendar",
-                title: event.eventDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()),
-                subtitle: timeText ?? "Time TBD",
-                tint: PopioTheme.coral
-            )
+            Rectangle()
+                .fill(PopioTheme.line)
+                .frame(width: 1, height: 18)
 
-            EventDetailDivider()
+            Label(timeText ?? "Time TBD", systemImage: "clock.fill")
+                .lineLimit(1)
 
-            EventDetailFact(
-                systemImage: "tag",
-                title: event.category.rawValue,
-                subtitle: "Pop-up",
-                tint: PopioTheme.gold
-            )
-
-            EventDetailDivider()
-
-            EventDetailFact(
-                systemImage: "person.2",
-                title: "\(event.goingCount) Going",
-                subtitle: "\(approvedReviewCount) chat",
-                tint: PopioTheme.accent
-            )
+            Spacer(minLength: 0)
         }
-        .padding(.vertical, 12)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .font(PopioFont.custom(size: 14, weight: .medium))
+        .foregroundStyle(PopioTheme.muted)
+        .padding(.horizontal, 14)
+        .frame(height: 50)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(PopioTheme.line, lineWidth: 1)
         }
     }
 
     private var descriptionCallout: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("A cozy evening pop-up")
+            Text("About")
                 .font(PopioFont.custom(size: 16, weight: .semibold))
-                .foregroundStyle(PopioTheme.ink)
+                .foregroundStyle(PopioTheme.gold)
 
             Text(descriptionText)
                 .font(PopioFont.custom(size: 14, weight: .regular))
@@ -206,18 +200,30 @@ struct EventDetailView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            LinearGradient(
-                colors: [
-                    PopioTheme.accentSoft.opacity(0.76),
-                    PopioTheme.coralSoft.opacity(0.62),
-                    PopioTheme.backgroundElevated
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-        )
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(PopioTheme.line, lineWidth: 1)
+        }
+    }
+
+    private var tagsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            EventDetailSectionTitle("Tags")
+
+            HStack(spacing: 8) {
+                ForEach(detailTags, id: \.self) { tag in
+                    EventDetailBadge(text: tag, tint: PopioTheme.gold)
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(PopioTheme.line, lineWidth: 1)
+        }
     }
 
     private var menuButton: some View {
@@ -308,6 +314,26 @@ struct EventDetailView: View {
                 }
 
                 Spacer()
+
+                if let creator, creator.id != session.currentUser?.id {
+                    Button {
+                        session.sendFriendRequest(to: creator)
+                    } label: {
+                        Text(followButtonTitle(for: creator))
+                            .font(PopioFont.custom(size: 13, weight: .semibold))
+                            .foregroundStyle(followButtonTint(for: creator))
+                            .padding(.horizontal, 17)
+                            .frame(height: 38)
+                            .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(followButtonTint(for: creator).opacity(0.58), lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(session.relationshipState(with: creator) != .none)
+                    .accessibilityLabel(followButtonTitle(for: creator))
+                }
             }
             .padding(14)
             .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -318,15 +344,15 @@ struct EventDetailView: View {
         }
     }
 
-    private var actionSection: some View {
-        HStack(spacing: 12) {
+    private var bottomActionBar: some View {
+        VStack(spacing: 10) {
             Button {
                 session.toggleGoing(for: currentEvent)
             } label: {
-                Label(session.isGoingByCurrentUser(currentEvent) ? "Going" : "Going", systemImage: "checkmark.circle.fill")
+                Label("Going", systemImage: session.isGoingByCurrentUser(currentEvent) ? "checkmark.circle.fill" : "checkmark.circle")
                     .font(PopioFont.custom(size: 15, weight: .semibold))
                     .frame(maxWidth: .infinity)
-                    .frame(height: 48)
+                    .frame(height: 46)
             }
             .foregroundStyle(.white)
             .background(eventActionGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -336,20 +362,32 @@ struct EventDetailView: View {
             NavigationLink {
                 EventChatView(event: currentEvent)
             } label: {
-                Label("Chat", systemImage: "bubble.left.and.bubble.right.fill")
+                Label("Chatroom", systemImage: "bubble.left.and.bubble.right.fill")
                     .font(PopioFont.custom(size: 15, weight: .semibold))
                     .frame(maxWidth: .infinity)
-                    .frame(height: 48)
+                    .frame(height: 46)
             }
-            .foregroundStyle(.white)
-            .background(eventActionGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .foregroundStyle(PopioTheme.gold)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.white.opacity(0.36), lineWidth: 1)
+                    .stroke(PopioTheme.gold.opacity(0.46), lineWidth: 1)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Open event chat")
+            .accessibilityLabel("Open event chatroom")
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 48)
+        .background(Color.white)
+    }
+
+    private var goingUsers: [PopioUser] {
+        currentEvent.goingUserIDs.compactMap { userID in
+            session.users.first { $0.id == userID }
+        }
+        .prefix(5)
+        .map(\.self)
     }
 
     private var eventActionGradient: LinearGradient {
@@ -503,6 +541,46 @@ struct EventDetailView: View {
         return URL(string: "http://maps.apple.com/?q=\(query)") ?? URL(string: "http://maps.apple.com")!
     }
 
+    private var dateBadgeText: String {
+        currentEvent.eventDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+    }
+
+    private var shortLocation: String {
+        let parts = currentEvent.address
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        return parts.dropFirst().first ?? parts.first ?? currentEvent.address
+    }
+
+    private var detailTags: [String] {
+        let tags = currentEvent.tags.isEmpty ? [currentEvent.category.rawValue] : currentEvent.tags
+        return tags.prefix(4).map(\.self)
+    }
+
+    private func followButtonTitle(for user: PopioUser) -> String {
+        switch session.relationshipState(with: user) {
+        case .none:
+            return "Follow"
+        case .outgoingPending:
+            return "Sent"
+        case .incomingPending:
+            return "Respond"
+        case .friends:
+            return "Following"
+        }
+    }
+
+    private func followButtonTint(for user: PopioUser) -> Color {
+        switch session.relationshipState(with: user) {
+        case .none:
+            return PopioTheme.gold
+        case .outgoingPending:
+            return PopioTheme.muted
+        case .incomingPending, .friends:
+            return PopioTheme.accent
+        }
+    }
+
     private var shareText: String {
         var parts = [
             currentEvent.title,
@@ -616,29 +694,74 @@ private struct EventDetailDivider: View {
 
 private struct EventDetailCircleActionButton: View {
     let systemImage: String
+    var foreground: Color = PopioTheme.ink
+    var background: Color = .white
 
     var body: some View {
         Image(systemName: systemImage)
-            .font(PopioFont.custom(size: 18, weight: .semibold))
-            .foregroundStyle(PopioTheme.gold)
-            .frame(width: 50, height: 50)
-            .background(
-                LinearGradient(
-                    colors: [
-                        PopioTheme.accentSoft.opacity(0.92),
-                        PopioTheme.coralSoft.opacity(0.72),
-                        Color.white
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                in: Circle()
-            )
+            .font(PopioFont.custom(size: 15.5, weight: .semibold))
+            .foregroundStyle(foreground)
+            .frame(width: 42, height: 42)
+            .background(background, in: Circle())
             .overlay {
                 Circle()
-                    .stroke(PopioTheme.gold.opacity(0.18), lineWidth: 1)
+                    .stroke(PopioTheme.line, lineWidth: 1)
             }
-            .shadow(color: PopioTheme.shadow.opacity(0.14), radius: 10, y: 5)
+            .shadow(color: PopioTheme.shadow.opacity(0.12), radius: 8, y: 4)
+    }
+}
+
+private struct EventDetailBadge: View {
+    let text: String
+    let tint: Color
+
+    var body: some View {
+        Text(text)
+            .font(PopioFont.custom(size: 13, weight: .semibold))
+            .foregroundStyle(tint)
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .frame(height: 34)
+            .background(tint.opacity(0.12), in: Capsule())
+    }
+}
+
+private struct GoingUsersStack: View {
+    let users: [PopioUser]
+    let totalCount: Int
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ZStack(alignment: .leading) {
+                ForEach(Array(users.enumerated()), id: \.element.id) { index, user in
+                    ProfileAvatarView(user: user, size: 30)
+                        .offset(x: CGFloat(index) * 20)
+                        .zIndex(Double(users.count - index))
+                }
+            }
+            .frame(width: CGFloat(max(users.count - 1, 0)) * 20 + 30, height: 32, alignment: .leading)
+
+            Text(goingText)
+                .font(PopioFont.custom(size: 12.5, weight: .semibold))
+                .foregroundStyle(PopioTheme.ink)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 44)
+        .background(PopioTheme.accentSoft.opacity(0.70), in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(PopioTheme.accent.opacity(0.18), lineWidth: 1)
+        }
+    }
+
+    private var goingText: String {
+        if totalCount == 1 {
+            return "1 person is going"
+        }
+
+        return "\(totalCount) people are going"
     }
 }
 
@@ -662,9 +785,9 @@ private struct EventPhotoAddTile: View {
                 .background(Color.white.opacity(0.70), in: Circle())
         }
         .aspectRatio(1, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(Rectangle())
         .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            Rectangle()
                 .stroke(PopioTheme.gold.opacity(0.16), lineWidth: 1)
         }
     }
@@ -683,7 +806,7 @@ private struct EventPhotoGridTile: View {
         )
         .aspectRatio(1, contentMode: .fill)
         .clipped()
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(Rectangle())
     }
 }
 
@@ -780,7 +903,7 @@ struct EventChatView: View {
     @EnvironmentObject private var session: AppSession
     let event: PopioEvent
     @State private var messageText = ""
-    private let tabBarClearance: CGFloat = 62
+    private let tabBarClearance: CGFloat = 46
 
     private var currentEvent: PopioEvent {
         session.events.first { $0.id == event.id } ?? event
@@ -789,6 +912,10 @@ struct EventChatView: View {
     private var messages: [EventContribution] {
         session.approvedContributions(for: currentEvent, type: .review)
             .sorted { $0.createdDate < $1.createdDate }
+    }
+
+    private var messageIDs: [String] {
+        messages.map(\.id)
     }
 
     var body: some View {
@@ -800,20 +927,34 @@ struct EventChatView: View {
                     if messages.isEmpty {
                         ChatEmptyState()
                             .padding(.horizontal, 16)
-                            .padding(.top, 48)
+                            .padding(.top, 112)
                     } else {
                         VStack(spacing: 10) {
                             ForEach(messages) { message in
                                 ChatMessageBubble(
                                     contribution: message,
-                                    isCurrentUser: message.createdByUserID == session.currentUser?.id
+                                    isCurrentUser: message.createdByUserID == session.currentUser?.id,
+                                    isLiked: session.isLikedByCurrentUser(message),
+                                    likeCount: message.likeCount,
+                                    toggleLike: {
+                                        session.toggleLike(for: message)
+                                    }
                                 )
                                 .id(message.id)
+                                .transition(
+                                    .asymmetric(
+                                        insertion: .move(edge: .bottom)
+                                            .combined(with: .opacity)
+                                            .combined(with: .scale(scale: 0.96, anchor: .bottom)),
+                                        removal: .opacity
+                                    )
+                                )
                             }
                         }
                         .padding(.horizontal, 16)
                         .padding(.top, 16)
                         .padding(.bottom, 18 + tabBarClearance)
+                        .animation(.spring(response: 0.28, dampingFraction: 0.86), value: messageIDs)
                     }
                 }
                 .scrollIndicators(.hidden)
@@ -836,8 +977,8 @@ struct EventChatView: View {
                 send: submitChatMessage
             )
             .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 8 + tabBarClearance)
+            .padding(.top, 4)
+            .padding(.bottom, 4 + tabBarClearance)
             .background(PopioTheme.backgroundElevated)
         }
     }
@@ -910,9 +1051,12 @@ struct EventChatView: View {
 private struct ChatMessageBubble: View {
     let contribution: EventContribution
     let isCurrentUser: Bool
+    let isLiked: Bool
+    let likeCount: Int
+    let toggleLike: () -> Void
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .center, spacing: 8) {
             if isCurrentUser {
                 Spacer(minLength: 48)
             }
@@ -943,6 +1087,30 @@ private struct ChatMessageBubble: View {
                     .font(PopioFont.custom(size: 10, weight: .medium))
                     .foregroundStyle(PopioTheme.muted.opacity(0.82))
                     .padding(.horizontal, 4)
+
+                if !isCurrentUser {
+                    Button(action: toggleLike) {
+                        HStack(spacing: 4) {
+                            Image(systemName: isLiked ? "heart.fill" : "heart")
+                                .font(PopioFont.custom(size: 11, weight: .semibold))
+                                .foregroundStyle(isLiked ? PopioTheme.coral : PopioTheme.muted)
+
+                            Text("\(likeCount)")
+                                .font(PopioFont.custom(size: 10.5, weight: .semibold))
+                                .foregroundStyle(PopioTheme.muted)
+                                .monospacedDigit()
+                        }
+                        .padding(.horizontal, 7)
+                        .frame(height: 24)
+                        .background(Color.white.opacity(0.78), in: Capsule())
+                        .overlay {
+                            Capsule()
+                                .stroke(PopioTheme.line, lineWidth: 1)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isLiked ? "Unlike message" : "Like message")
+                }
             }
 
             if !isCurrentUser {
@@ -976,24 +1144,20 @@ private struct ChatInputBar: View {
     }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 10) {
+        HStack(alignment: .bottom, spacing: 8) {
             TextField("Message", text: $text, axis: .vertical)
                 .lineLimit(1...4)
                 .font(PopioFont.custom(size: 14, weight: .medium))
                 .foregroundStyle(PopioTheme.ink)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 11)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(PopioTheme.line, lineWidth: 1)
-                }
+                .frame(maxWidth: .infinity)
 
             Button(action: send) {
                 Image(systemName: "arrow.up")
-                    .font(PopioFont.custom(size: 17, weight: .bold))
+                    .font(PopioFont.custom(size: 15, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 42, height: 42)
+                    .frame(width: 34, height: 34)
                     .background(
                         LinearGradient(
                             colors: isSendDisabled
@@ -1009,41 +1173,25 @@ private struct ChatInputBar: View {
             .disabled(isSendDisabled)
             .accessibilityLabel("Send chat message")
         }
-        .padding(10)
-        .background(EventChatBarBackground(), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 25, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(PopioTheme.gold.opacity(0.16), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 25, style: .continuous)
+                .stroke(Color.black.opacity(0.28), lineWidth: 1)
         }
     }
 }
 
 private struct ChatEmptyState: View {
     var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "bubble.left.and.bubble.right.fill")
-                .font(PopioFont.custom(size: 30, weight: .semibold))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [PopioTheme.gold, PopioTheme.gold],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 58, height: 58)
-                .background(PopioTheme.gold.opacity(0.12), in: Circle())
-
-            Text("No chat yet")
-                .font(PopioFont.custom(size: 15, weight: .semibold))
-                .foregroundStyle(PopioTheme.ink)
-
-            Text("Start the conversation for this pop-up.")
-                .font(PopioFont.custom(size: 12, weight: .medium))
-                .foregroundStyle(PopioTheme.muted)
-        }
+        Image("nomsgyet")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 270, height: 270)
+            .accessibilityLabel("No messages yet")
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
-        .background(Color.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(.vertical, 54)
     }
 }
 

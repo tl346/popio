@@ -57,7 +57,7 @@ struct ProfileView: View {
                         }
                     }
                 )
-                .presentationDetents([.height(230)])
+                .presentationDetents([.height(135)])
                 .presentationDragIndicator(.hidden)
             }
             .navigationDestination(for: PopioEvent.self) { event in
@@ -67,13 +67,7 @@ struct ProfileView: View {
     }
 
     private var profileTopBar: some View {
-        HStack(spacing: 10) {
-            Image("appicontransparent")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 44, height: 44)
-                .accessibilityLabel("Popio")
-
+        HStack {
             Spacer()
 
             Button {
@@ -458,7 +452,6 @@ private struct ProfileStatBlock: View {
                 .font(PopioFont.custom(size: 15, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 28, height: 28)
-                .background(tint.opacity(0.15), in: Circle())
 
             Text(value)
                 .font(PopioFont.custom(size: 15.5, weight: .semibold))
@@ -494,12 +487,14 @@ private struct ProfileOptionsSheet: View {
                 ProfileMenuButton(
                     title: "Edit Profile",
                     systemImage: "pencil",
+                    tint: PopioTheme.accent,
                     action: editProfile
                 )
 
                 ProfileMenuButton(
                     title: "Sign Out",
                     systemImage: "rectangle.portrait.and.arrow.right",
+                    tint: PopioTheme.coral,
                     action: signOut
                 )
             }
@@ -510,6 +505,7 @@ private struct ProfileOptionsSheet: View {
 private struct ProfileMenuButton: View {
     let title: String
     let systemImage: String
+    let tint: Color
     let action: () -> Void
 
     var body: some View {
@@ -519,13 +515,12 @@ private struct ProfileMenuButton: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(PopioTheme.ink)
         .background(
             LinearGradient(
                 colors: [
-                    PopioTheme.coral.opacity(0.86),
-                    PopioTheme.gold.opacity(0.90),
-                    PopioTheme.accent.opacity(0.86)
+                    tint.opacity(0.24),
+                    tint.opacity(0.14)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -534,7 +529,7 @@ private struct ProfileMenuButton: View {
         )
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.white.opacity(0.35), lineWidth: 1)
+                .stroke(tint.opacity(0.32), lineWidth: 1)
         }
         .buttonStyle(.plain)
     }
@@ -939,9 +934,8 @@ private struct EditProfileView: View {
 private enum EditProfilePalette {
     static let background = LinearGradient(
         colors: [
-            PopioTheme.backgroundElevated,
-            ProfilePalette.orangeSoft.opacity(0.34),
-            PopioTheme.background
+            Color.white,
+            Color.white
         ],
         startPoint: .top,
         endPoint: .bottom
