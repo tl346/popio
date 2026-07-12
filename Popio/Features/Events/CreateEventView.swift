@@ -146,8 +146,8 @@ struct CreateEventView: View {
                             RemoteImagePlaceholder(category: category)
                         }
                     }
-                    .frame(width: 84, height: 84)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .frame(width: 112, height: 67)
+                    .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
 
                     Image(systemName: "camera.fill")
                         .font(PopioFont.custom(size: 20, weight: .medium))
@@ -1102,7 +1102,7 @@ private struct BannerCropSelector: View {
     let imageData: Data?
     @Binding var focusY: Double
 
-    private let bannerAspectRatio = 2.4
+    private let bannerAspectRatio = 5.0 / 3.0
 
     var body: some View {
         if let imageData, let uiImage = UIImage(data: imageData) {

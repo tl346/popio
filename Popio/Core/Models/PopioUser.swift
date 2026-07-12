@@ -7,6 +7,7 @@ struct PopioUser: Identifiable, Hashable {
     var firstName: String
     var lastName: String
     var bio: String
+    var instagramHandle: String = ""
     var email: String
     var profilePictureURL: URL?
     var profileImageData: Data?

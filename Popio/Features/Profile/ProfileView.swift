@@ -6,6 +6,8 @@ struct ProfileView: View {
     @EnvironmentObject private var session: AppSession
     @StateObject private var viewModel = ProfileViewModel()
     @State private var isShowingEditProfile = false
+    @State private var editProfileInitialFocus: EditProfileFocusedField?
+    @State private var isShowingProfileMenu = false
     @State private var selectedActivityTab: ProfileActivityTab = .going
 
     var body: some View {
@@ -31,8 +33,32 @@ struct ProfileView: View {
                 viewModel.load(from: session.currentUser)
             }
             .sheet(isPresented: $isShowingEditProfile) {
-                EditProfileView(viewModel: viewModel, isPresented: $isShowingEditProfile)
+                EditProfileView(
+                    viewModel: viewModel,
+                    isPresented: $isShowingEditProfile,
+                    initialFocus: editProfileInitialFocus
+                )
                     .environmentObject(session)
+            }
+            .sheet(isPresented: $isShowingProfileMenu) {
+                ProfileOptionsSheet(
+                    editProfile: {
+                        viewModel.load(from: session.currentUser)
+                        editProfileInitialFocus = nil
+                        isShowingProfileMenu = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                            isShowingEditProfile = true
+                        }
+                    },
+                    signOut: {
+                        isShowingProfileMenu = false
+                        Task {
+                            try? await session.logout()
+                        }
+                    }
+                )
+                .presentationDetents([.height(230)])
+                .presentationDragIndicator(.hidden)
             }
             .navigationDestination(for: PopioEvent.self) { event in
                 EventDetailView(event: event)
@@ -41,31 +67,22 @@ struct ProfileView: View {
     }
 
     private var profileTopBar: some View {
-        HStack {
-            ProfileLogoMark()
+        HStack(spacing: 10) {
+            Image("appicontransparent")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 44, height: 44)
+                .accessibilityLabel("Popio")
 
             Spacer()
 
-            Menu {
-                Button {
-                    viewModel.load(from: session.currentUser)
-                    isShowingEditProfile = true
-                } label: {
-                    Label("Edit Profile", systemImage: "pencil")
-                }
-
-                Button(role: .destructive) {
-                    Task {
-                        try? await session.logout()
-                    }
-                } label: {
-                    Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-                }
+            Button {
+                isShowingProfileMenu = true
             } label: {
-                Image(systemName: "line.3.horizontal")
-                    .font(PopioFont.custom(size: 21, weight: .semibold))
-                    .foregroundStyle(ProfilePalette.ink)
-                    .frame(width: 44, height: 44)
+                Image(systemName: "ellipsis")
+                    .font(PopioFont.custom(size: 17, weight: .bold))
+                    .foregroundStyle(ProfilePalette.orange)
+                    .frame(width: 32, height: 32)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Profile options")
@@ -78,34 +95,26 @@ struct ProfileView: View {
     }
 
     private var profileHeader: some View {
-        VStack(spacing: 20) {
-            HStack(alignment: .center, spacing: 16) {
-                ProfileAvatarView(user: session.currentUser, size: 96)
+        VStack(spacing: 14) {
+            ProfileHeroAvatar(user: session.currentUser)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(profileFullName)
-                            .font(PopioFont.custom(size: 21, weight: .semibold))
-                            .foregroundStyle(ProfilePalette.ink)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.62)
+            VStack(spacing: 8) {
+                Text(profileFullName)
+                    .font(PopioFont.custom(size: 24, weight: .semibold))
+                    .foregroundStyle(ProfilePalette.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.62)
 
-                        Text(profileSecondaryName)
-                            .font(PopioFont.custom(size: 13.5, weight: .semibold))
-                            .foregroundStyle(ProfilePalette.muted)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.72)
-                    }
+                InstagramProfilePill(handle: profileInstagramHandle)
 
-                    Text(profileBio)
-                        .font(PopioFont.custom(size: 13, weight: .medium))
-                        .foregroundStyle(ProfilePalette.body)
-                        .lineSpacing(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(profileBio)
+                    .font(PopioFont.custom(size: 14.5, weight: .medium))
+                    .foregroundStyle(ProfilePalette.body)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 18)
             }
-
         }
     }
 
@@ -114,7 +123,8 @@ struct ProfileView: View {
             ProfileStatBlock(
                 systemImage: "star.fill",
                 value: "\(pointsCount.formatted())",
-                label: "Points"
+                label: "Points",
+                tint: PopioTheme.coral
             )
 
             ProfileStatDivider()
@@ -122,7 +132,8 @@ struct ProfileView: View {
             ProfileStatBlock(
                 systemImage: "checkmark.circle",
                 value: "\(goingEvents.count)",
-                label: "Going"
+                label: "Going",
+                tint: ProfilePalette.orange
             )
 
             ProfileStatDivider()
@@ -132,26 +143,20 @@ struct ProfileView: View {
             } label: {
                 ProfileStatBlock(
                     systemImage: "person.2",
-                    value: "\(friendsCount)",
-                    label: "Friends"
+                    value: "\(followersCount)",
+                    label: "Followers",
+                    tint: PopioTheme.accent
                 )
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Show friends list")
+            .accessibilityLabel("Show followers list")
         }
         .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
     }
 
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("My Activity")
-                    .font(PopioFont.custom(size: 18, weight: .semibold))
-                    .foregroundStyle(ProfilePalette.ink)
-
-                Spacer()
-            }
-
             ProfileActivityPicker(selectedTab: $selectedActivityTab)
 
             VStack(spacing: 0) {
@@ -194,7 +199,7 @@ struct ProfileView: View {
         } else {
             ForEach(Array(chats.prefix(6).enumerated()), id: \.element.id) { index, chat in
                 NavigationLink {
-                    EventDetailView(event: chat.event, opensChat: true)
+                    EventChatView(event: chat.event)
                 } label: {
                     ProfileChatActivityRow(
                         chat: chat,
@@ -233,11 +238,15 @@ struct ProfileView: View {
         return trimmedBio.isEmpty ? "Add a bio to tell people what pop-ups you love." : trimmedBio
     }
 
+    private var profileInstagramHandle: String {
+        session.currentUser?.instagramHandle.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
     private var pointsCount: Int {
         session.mvpStanding(for: session.currentUser)?.points ?? 0
     }
 
-    private var friendsCount: Int {
+    private var followersCount: Int {
         guard let currentUserID = session.currentUser?.id else { return 0 }
         return session.friendRequests.filter {
             $0.status == .accepted
@@ -284,6 +293,10 @@ private enum ProfileActivityTab: String, CaseIterable {
     case activeChats = "Active Chats"
 }
 
+private enum EditProfileFocusedField: Hashable {
+    case instagram
+}
+
 private struct ProfileChatSummary: Identifiable, Hashable {
     let event: PopioEvent
     let latestChat: EventContribution
@@ -299,6 +312,15 @@ private enum ProfilePalette {
     static let orangeSoft = PopioTheme.gold.opacity(0.16)
     static let line = PopioTheme.line
     static let shadow = PopioTheme.shadow
+    static let cardGradient = LinearGradient(
+        colors: [
+            PopioTheme.surface,
+            PopioTheme.gold.opacity(0.08),
+            PopioTheme.coralSoft.opacity(0.20)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
 }
 
 private struct ProfileLogoMark: View {
@@ -311,32 +333,146 @@ private struct ProfileLogoMark: View {
     }
 }
 
+private struct ProfileHeroAvatar: View {
+    let user: PopioUser?
+
+    var body: some View {
+        ProfileAvatarView(user: user, size: 132)
+            .padding(5)
+            .background(
+                LinearGradient(
+                    colors: [
+                        PopioTheme.coral.opacity(0.82),
+                        PopioTheme.gold,
+                        PopioTheme.accent.opacity(0.72)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: Circle()
+            )
+            .padding(4)
+            .background(PopioTheme.backgroundElevated, in: Circle())
+            .shadow(color: ProfilePalette.shadow.opacity(0.25), radius: 18, y: 9)
+    }
+}
+
+private struct InstagramProfilePill: View {
+    @Environment(\.openURL) private var openURL
+    let handle: String
+
+    private var displayHandle: String {
+        let trimmed = handle.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Add Instagram" : "@\(trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "@")))"
+    }
+
+    private var instagramURL: URL? {
+        let normalized = handle.trimmingCharacters(in: CharacterSet(charactersIn: "@/ "))
+        guard !normalized.isEmpty else { return nil }
+        return URL(string: "https://instagram.com/\(normalized)")
+    }
+
+    private var instagramAppURL: URL? {
+        let normalized = handle.trimmingCharacters(in: CharacterSet(charactersIn: "@/ "))
+        guard !normalized.isEmpty else { return nil }
+        return URL(string: "instagram://user?username=\(normalized)")
+    }
+
+    var body: some View {
+        Group {
+            if let instagramURL {
+                Button {
+                    if let instagramAppURL {
+                        openURL(instagramAppURL) { accepted in
+                            if !accepted {
+                                openURL(instagramURL)
+                            }
+                        }
+                    } else {
+                        openURL(instagramURL)
+                    }
+                } label: {
+                    pillContent
+                }
+                .buttonStyle(.plain)
+            } else {
+                pillContent
+            }
+        }
+        .accessibilityLabel("Instagram \(displayHandle)")
+    }
+
+    private var pillContent: some View {
+        HStack(spacing: 7) {
+            Image("instagramlogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 14, height: 14)
+
+            Text(displayHandle)
+                .font(PopioFont.custom(size: 12, weight: .semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(ProfilePalette.orange)
+        .padding(.horizontal, 12)
+        .frame(height: 30)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color(red: 0.99, green: 0.83, blue: 0.46).opacity(0.22),
+                    Color(red: 0.84, green: 0.16, blue: 0.46).opacity(0.14),
+                    Color(red: 0.59, green: 0.18, blue: 0.75).opacity(0.16)
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            ),
+            in: Capsule()
+        )
+        .overlay {
+            Capsule()
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.99, green: 0.83, blue: 0.46).opacity(0.72),
+                            Color(red: 0.84, green: 0.16, blue: 0.46).opacity(0.60),
+                            Color(red: 0.31, green: 0.36, blue: 0.84).opacity(0.56)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    lineWidth: 1
+                )
+        }
+    }
+}
+
 private struct ProfileStatBlock: View {
     let systemImage: String
     let value: String
     let label: String
+    let tint: Color
 
     var body: some View {
-        VStack(spacing: 5) {
-            HStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(PopioFont.custom(size: 18, weight: .semibold))
-                    .foregroundStyle(ProfilePalette.orange)
+        VStack(spacing: 4) {
+            Image(systemName: systemImage)
+                .font(PopioFont.custom(size: 15, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 28, height: 28)
+                .background(tint.opacity(0.15), in: Circle())
 
-                Text(value)
-                    .font(PopioFont.custom(size: 18, weight: .bold))
-                    .foregroundStyle(ProfilePalette.ink)
-                    .monospacedDigit()
-            }
+            Text(value)
+                .font(PopioFont.custom(size: 15.5, weight: .semibold))
+                .foregroundStyle(ProfilePalette.ink)
+                .monospacedDigit()
 
             Text(label)
-                .font(PopioFont.custom(size: 12, weight: .medium))
+                .font(PopioFont.custom(size: 10.5, weight: .medium))
                 .foregroundStyle(ProfilePalette.body)
                 .lineLimit(1)
                 .minimumScaleFactor(0.76)
         }
         .frame(maxWidth: .infinity)
-        .frame(minHeight: 58)
+        .frame(minHeight: 66)
     }
 }
 
@@ -344,7 +480,63 @@ private struct ProfileStatDivider: View {
     var body: some View {
         Rectangle()
             .fill(ProfilePalette.line)
-            .frame(width: 1, height: 48)
+            .frame(width: 1, height: 62)
+    }
+}
+
+private struct ProfileOptionsSheet: View {
+    let editProfile: () -> Void
+    let signOut: () -> Void
+
+    var body: some View {
+        MiniMenuSheet(title: "Profile") {
+            HStack(spacing: 10) {
+                ProfileMenuButton(
+                    title: "Edit Profile",
+                    systemImage: "pencil",
+                    action: editProfile
+                )
+
+                ProfileMenuButton(
+                    title: "Sign Out",
+                    systemImage: "rectangle.portrait.and.arrow.right",
+                    action: signOut
+                )
+            }
+        }
+    }
+}
+
+private struct ProfileMenuButton: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(PopioFont.custom(size: 14, weight: .semibold))
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+        }
+        .foregroundStyle(.white)
+        .background(
+            LinearGradient(
+                colors: [
+                    PopioTheme.coral.opacity(0.86),
+                    PopioTheme.gold.opacity(0.90),
+                    PopioTheme.accent.opacity(0.86)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.35), lineWidth: 1)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -503,9 +695,11 @@ private struct EditProfileView: View {
     @EnvironmentObject private var session: AppSession
     @ObservedObject var viewModel: ProfileViewModel
     @Binding var isPresented: Bool
+    let initialFocus: EditProfileFocusedField?
     @State private var selectedProfilePhoto: PhotosPickerItem?
     @State private var isUploadingProfilePhoto = false
     @State private var profilePhotoError: String?
+    @FocusState private var focusedField: EditProfileFocusedField?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -551,6 +745,20 @@ private struct EditProfileView: View {
 
                         EditProfileDivider()
 
+                        EditProfileFieldRow(
+                            systemImage: "camera",
+                            assetImage: "instagramlogo",
+                            title: "Instagram",
+                            text: $viewModel.instagramHandle,
+                            placeholder: "@username",
+                            capitalization: .never,
+                            keyboardType: .URL,
+                            focusedField: $focusedField,
+                            field: .instagram
+                        )
+
+                        EditProfileDivider()
+
                         EditProfileBioRow(text: $viewModel.bio)
                     }
                     .background(Color.white, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -586,6 +794,11 @@ private struct EditProfileView: View {
         .background(EditProfilePalette.background.ignoresSafeArea())
         .onAppear {
             viewModel.load(from: session.currentUser)
+            guard let initialFocus else { return }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                focusedField = initialFocus
+            }
         }
         .onChange(of: selectedProfilePhoto) { _, newValue in
             guard let newValue else { return }
@@ -712,7 +925,8 @@ private struct EditProfileView: View {
                 email: viewModel.email,
                 firstName: viewModel.firstName,
                 lastName: viewModel.lastName,
-                bio: viewModel.bio
+                bio: viewModel.bio,
+                instagramHandle: viewModel.instagramHandle
             )
             viewModel.load(from: session.currentUser)
             isPresented = false
@@ -755,21 +969,38 @@ private struct EditProfileNameRow: View {
 
 private struct EditProfileFieldRow: View {
     let systemImage: String
+    var assetImage: String? = nil
     let title: String
     @Binding var text: String
     let placeholder: String
     let capitalization: TextInputAutocapitalization
     let keyboardType: UIKeyboardType
+    var focusedField: FocusState<EditProfileFocusedField?>.Binding? = nil
+    var field: EditProfileFocusedField? = nil
 
     var body: some View {
-        EditProfileRowShell(systemImage: systemImage, title: title) {
-            TextField(placeholder, text: $text)
-                .textInputAutocapitalization(capitalization)
-                .keyboardType(keyboardType)
-                .disableAutocorrection(true)
-                .font(PopioFont.custom(size: 14, weight: .medium))
-                .foregroundStyle(ProfilePalette.body)
+        EditProfileRowShell(systemImage: systemImage, assetImage: assetImage, title: title) {
+            textField
         }
+    }
+
+    @ViewBuilder
+    private var textField: some View {
+        if let focusedField, let field {
+            baseTextField
+                .focused(focusedField, equals: field)
+        } else {
+            baseTextField
+        }
+    }
+
+    private var baseTextField: some View {
+        TextField(placeholder, text: $text)
+            .textInputAutocapitalization(capitalization)
+            .keyboardType(keyboardType)
+            .disableAutocorrection(true)
+            .font(PopioFont.custom(size: 14, weight: .medium))
+            .foregroundStyle(ProfilePalette.body)
     }
 }
 
@@ -789,16 +1020,26 @@ private struct EditProfileBioRow: View {
 
 private struct EditProfileRowShell<Content: View>: View {
     let systemImage: String
+    var assetImage: String? = nil
     let title: String
     var alignment: VerticalAlignment = .center
     @ViewBuilder let content: Content
 
     var body: some View {
         HStack(alignment: alignment, spacing: 14) {
-            Image(systemName: systemImage)
-                .font(PopioFont.custom(size: 20, weight: .medium))
-                .foregroundStyle(ProfilePalette.orange)
-                .frame(width: 28)
+            Group {
+                if let assetImage {
+                    Image(assetImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 21, height: 21)
+                } else {
+                    Image(systemName: systemImage)
+                        .font(PopioFont.custom(size: 20, weight: .medium))
+                        .foregroundStyle(ProfilePalette.orange)
+                }
+            }
+            .frame(width: 28)
 
             Text(title)
                 .font(PopioFont.custom(size: 14, weight: .semibold))

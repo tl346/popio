@@ -41,7 +41,7 @@ struct FriendsView: View {
     private var suggestionsSection: some View {
         let users = session.suggestedUsers(query: viewModel.searchText, limit: 3)
 
-        return FriendSection(title: "Suggested Friends", systemImage: "person.crop.circle.badge.plus") {
+        return FriendSection(title: "Suggested Followers", systemImage: "person.crop.circle.badge.plus") {
             if users.isEmpty {
                 FriendEmptyRow(text: "No suggestions right now.")
             } else {
@@ -77,9 +77,9 @@ struct FriendsView: View {
     private var friendsSection: some View {
         let friends = viewModel.friends(in: session)
 
-        return FriendSection(title: "Friends", systemImage: "person.2.fill") {
+        return FriendSection(title: "Followers", systemImage: "person.2.fill") {
             if friends.isEmpty {
-                FriendEmptyRow(text: "Accepted friends will appear here.")
+                FriendEmptyRow(text: "Accepted followers will appear here.")
             } else {
                 ForEach(friends) { user in
                     HStack(spacing: 12) {
@@ -95,7 +95,7 @@ struct FriendsView: View {
                         .foregroundStyle(PopioTheme.coral)
                         .background(PopioTheme.coral.opacity(0.10), in: Circle())
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Remove friend")
+                        .accessibilityLabel("Remove follower")
                     }
                 }
             }
@@ -185,7 +185,7 @@ private struct UserRow: View {
             .foregroundStyle(PopioTheme.accent)
             .background(PopioTheme.accentSoft, in: Circle())
             .buttonStyle(.plain)
-            .accessibilityLabel("Add friend")
+            .accessibilityLabel("Add follower")
 
         case .outgoingPending:
             FriendStatusPill(text: "Sent", systemImage: "paperplane.fill", tint: PopioTheme.muted)
@@ -194,7 +194,7 @@ private struct UserRow: View {
             FriendStatusPill(text: "Respond", systemImage: "arrow.down.message.fill", tint: PopioTheme.accent)
 
         case .friends:
-            FriendStatusPill(text: "Friends", systemImage: "checkmark.circle.fill", tint: PopioTheme.accent)
+            FriendStatusPill(text: "Following", systemImage: "checkmark.circle.fill", tint: PopioTheme.accent)
         }
     }
 }

@@ -8,11 +8,6 @@ struct EventFeedView: View {
     @State private var isSearchExpanded = false
     @FocusState private var focusedSearchField: FeedSearchField?
 
-    private let gridColumns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
-    ]
-
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -24,7 +19,7 @@ struct EventFeedView: View {
                     )
 
                     FeedFilterBar(
-                        selectedCategory: $viewModel.selectedCategory,
+                        selectedCategories: $viewModel.selectedCategories,
                         isOpenNowOnly: $viewModel.isOpenNowOnly,
                         radiusOption: $viewModel.radiusOption
                     )
@@ -40,6 +35,10 @@ struct EventFeedView: View {
 
                 ScrollView {
                     let events = viewModel.filteredEvents(from: session.approvedEvents)
+                    let columns = [
+                        GridItem(.flexible(), spacing: 12),
+                        GridItem(.flexible(), spacing: 12)
+                    ]
 
                     VStack(alignment: .leading, spacing: 18) {
                         if events.isEmpty {
@@ -51,7 +50,7 @@ struct EventFeedView: View {
                             .padding(.top, 32)
                             .padding(.bottom, 128)
                         } else {
-                            LazyVGrid(columns: gridColumns, spacing: 16) {
+                            LazyVGrid(columns: columns, spacing: 16) {
                                 ForEach(events) { event in
                                     EventCardView(
                                         event: event,
@@ -75,8 +74,13 @@ struct EventFeedView: View {
             }
             .background(PopioTheme.background)
             .navigationTitle("")
-            .navigationDestination(for: PopioEvent.self) { event in
-                EventDetailView(event: event)
+            .navigationDestination(for: EventFeedRoute.self) { route in
+                switch route {
+                case .detail(let event):
+                    EventDetailView(event: event)
+                case .chat(let event):
+                    EventChatView(event: event)
+                }
             }
         }
     }
@@ -90,53 +94,93 @@ struct EventFeedView: View {
 
 }
 
+private enum EventFeedRoute: Hashable {
+    case detail(PopioEvent)
+    case chat(PopioEvent)
+}
+
 private enum FeedSearchField: Hashable {
     case name
     case location
 }
 
+private extension EventCategory {
+    var filterTitle: String {
+        switch self {
+        case .food:
+            return "F&B"
+        case .matcha:
+            return "Matcha"
+        case .cards:
+            return "Cards"
+        case .farmersMarket:
+            return "Market"
+        }
+    }
+
+    var filterIcon: String {
+        switch self {
+        case .food:
+            return "fork.knife"
+        case .matcha:
+            return "cup.and.saucer.fill"
+        case .cards:
+            return "rectangle.stack"
+        case .farmersMarket:
+            return "basket"
+        }
+    }
+}
+
+private enum FeedFilterSheet: Identifiable {
+    case radius
+    case category
+
+    var id: String {
+        switch self {
+        case .radius:
+            return "radius"
+        case .category:
+            return "category"
+        }
+    }
+}
+
 private struct FeedFilterBar: View {
-    @Binding var selectedCategory: EventCategory?
+    @Binding var selectedCategories: Set<EventCategory>
     @Binding var isOpenNowOnly: Bool
-    @Binding var radiusOption: EventRadiusOption
+    @Binding var radiusOption: EventRadiusOption?
     var showsSort = true
+    @State private var activeSheet: FeedFilterSheet?
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                Menu {
-                    Picker("Radius", selection: $radiusOption) {
-                        ForEach(EventRadiusOption.allCases) { option in
-                            Text(option.title).tag(option)
-                        }
-                    }
+                Button {
+                    activeSheet = .radius
                 } label: {
                     FilterPill(
                         systemImage: "location.circle",
-                        text: "\(Int(radiusOption.rawValue)) mi",
-                        isActive: true,
-                        showsChevron: true
+                        text: radiusOption.map { "\(Int($0.rawValue)) mi" } ?? "Radius",
+                        isActive: radiusOption != nil,
+                        showsChevron: true,
+                        tint: PopioTheme.accent
                     )
                 }
+                .buttonStyle(.plain)
 
-                Menu {
-                    Button("All Categories") {
-                        selectedCategory = nil
-                    }
-
-                    ForEach(EventCategory.allCases) { category in
-                        Button(category.rawValue) {
-                            selectedCategory = category
-                        }
-                    }
+                Button {
+                    activeSheet = .category
                 } label: {
                     FilterPill(
                         systemImage: "tag",
-                        text: selectedCategory?.rawValue ?? "All Categories",
-                        isActive: selectedCategory != nil,
-                        showsChevron: true
+                        text: categoryFilterTitle,
+                        isActive: !selectedCategories.isEmpty,
+                        showsChevron: true,
+                        tint: PopioTheme.gold
                     )
                 }
+                .buttonStyle(.plain)
 
                 Button {
                     isOpenNowOnly.toggle()
@@ -145,11 +189,198 @@ private struct FeedFilterBar: View {
                         systemImage: isOpenNowOnly ? "checkmark.circle.fill" : "clock",
                         text: "Open Now",
                         isActive: isOpenNowOnly,
-                        showsChevron: false
+                        showsChevron: false,
+                        tint: PopioTheme.coral
                     )
                 }
                 .buttonStyle(.plain)
             }
+        }
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .radius:
+                MiniMenuSheet(title: "Radius") {
+                    RadiusSliderMenu(radiusOption: $radiusOption) {
+                        activeSheet = nil
+                    }
+                }
+                .presentationDetents([.height(260)])
+                .presentationDragIndicator(.hidden)
+            case .category:
+                MiniMenuSheet(title: "Category") {
+                    CategoryChipMenu(selectedCategories: $selectedCategories) {
+                        activeSheet = nil
+                    }
+                }
+                .presentationDetents([.height(310)])
+                .presentationDragIndicator(.hidden)
+            }
+        }
+    }
+
+    private var categoryFilterTitle: String {
+        if selectedCategories.isEmpty {
+            return "All Categories"
+        }
+
+        if selectedCategories.count == 1, let category = selectedCategories.first {
+            return category.rawValue
+        }
+
+        return "\(selectedCategories.count) Categories"
+    }
+}
+
+private struct CategoryChipMenu: View {
+    @Binding var selectedCategories: Set<EventCategory>
+    let done: () -> Void
+
+    private let columns = [
+        GridItem(.adaptive(minimum: 112), spacing: 8)
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Button {
+                selectedCategories.removeAll()
+            } label: {
+                Label("All Categories", systemImage: "square.grid.2x2")
+                    .font(PopioFont.custom(size: 12, weight: .medium))
+                    .foregroundStyle(selectedCategories.isEmpty ? PopioTheme.gold : PopioTheme.ink)
+                    .lineLimit(1)
+                    .padding(.horizontal, 10)
+                    .frame(height: 34)
+                    .background(selectedCategories.isEmpty ? PopioTheme.gold.opacity(0.10) : PopioTheme.surface, in: Capsule())
+                    .overlay {
+                        Capsule()
+                            .stroke(selectedCategories.isEmpty ? PopioTheme.gold.opacity(0.68) : PopioTheme.line, lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+                ForEach(EventCategory.allCases) { category in
+                    Button {
+                        if selectedCategories.contains(category) {
+                            selectedCategories.remove(category)
+                        } else {
+                            selectedCategories.insert(category)
+                        }
+                    } label: {
+                        Label(category.filterTitle, systemImage: category.filterIcon)
+                            .font(PopioFont.custom(size: 12, weight: .medium))
+                            .foregroundStyle(selectedCategories.contains(category) ? PopioTheme.gold : PopioTheme.ink)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .padding(.horizontal, 10)
+                            .frame(height: 34)
+                            .background(selectedCategories.contains(category) ? PopioTheme.gold.opacity(0.10) : PopioTheme.surface, in: Capsule())
+                            .overlay {
+                                Capsule()
+                                    .stroke(selectedCategories.contains(category) ? PopioTheme.gold.opacity(0.68) : PopioTheme.line, lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Button(action: done) {
+                Text("Done")
+                    .font(PopioFont.custom(size: 15, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 46)
+            }
+            .foregroundStyle(.white)
+            .background(PopioTheme.gold, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .buttonStyle(.plain)
+        }
+        .padding(14)
+        .background(Color.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(PopioTheme.gold.opacity(0.18), lineWidth: 1)
+        }
+    }
+}
+
+private struct RadiusSliderMenu: View {
+    @Binding var radiusOption: EventRadiusOption?
+    let done: () -> Void
+
+    private let options = EventRadiusOption.allCases
+
+    private var sliderValue: Binding<Double> {
+        Binding(
+            get: {
+                Double(options.firstIndex(of: radiusOption ?? .ten) ?? 1)
+            },
+            set: { newValue in
+                let index = Int(newValue.rounded())
+                radiusOption = options[min(max(index, 0), options.count - 1)]
+            }
+        )
+    }
+
+    var body: some View {
+        VStack(spacing: 18) {
+            HStack {
+                Label(radiusOption.map { "\(Int($0.rawValue)) miles" } ?? "No radius", systemImage: "location.circle.fill")
+                    .font(PopioFont.custom(size: 16, weight: .semibold))
+                    .foregroundStyle(PopioTheme.ink)
+
+                Spacer()
+            }
+
+            Button {
+                radiusOption = nil
+            } label: {
+                HStack {
+                    Text("No radius")
+                    Spacer()
+                    Image(systemName: radiusOption == nil ? "checkmark.circle.fill" : "circle")
+                }
+                .font(PopioFont.custom(size: 14, weight: .semibold))
+                .foregroundStyle(radiusOption == nil ? PopioTheme.accent : PopioTheme.ink)
+                .padding(.horizontal, 12)
+                .frame(height: 42)
+                .background(radiusOption == nil ? PopioTheme.accent.opacity(0.12) : Color.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.plain)
+
+            Slider(
+                value: sliderValue,
+                in: 0...Double(options.count - 1),
+                step: 1
+            )
+            .tint(PopioTheme.accent)
+
+            HStack {
+                ForEach(options) { option in
+                    Text("\(Int(option.rawValue))")
+                        .font(PopioFont.custom(size: 11, weight: .semibold))
+                        .foregroundStyle(radiusOption == option ? PopioTheme.accent : PopioTheme.muted)
+
+                    if option != options.last {
+                        Spacer()
+                    }
+                }
+            }
+
+            Button(action: done) {
+                Text("Done")
+                    .font(PopioFont.custom(size: 15, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+            }
+            .foregroundStyle(.white)
+            .background(PopioTheme.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .background(Color.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(PopioTheme.accent.opacity(0.18), lineWidth: 1)
         }
     }
 }
@@ -336,6 +567,12 @@ struct EventMapView: View {
         NavigationStack {
             ZStack {
                 Map(position: $cameraPosition) {
+                    if let userCoordinate {
+                        Annotation("Your location", coordinate: userCoordinate) {
+                            UserLocationMapPin()
+                        }
+                    }
+
                     ForEach(eventsWithCoordinates) { event in
                         if let coordinate = event.coordinate {
                             Annotation(event.title, coordinate: coordinate) {
@@ -645,7 +882,7 @@ private struct MapTopChrome: View {
             )
 
             FeedFilterBar(
-                selectedCategory: $viewModel.selectedCategory,
+                selectedCategories: $viewModel.selectedCategories,
                 isOpenNowOnly: $viewModel.isOpenNowOnly,
                 radiusOption: $viewModel.radiusOption,
                 showsSort: false
@@ -665,18 +902,9 @@ private struct MapTopChrome: View {
 
 private struct HeaderBottomFade: View {
     var body: some View {
-        LinearGradient(
-            colors: [
-                Color.white.opacity(0.94),
-                Color.white.opacity(0.62),
-                Color.white.opacity(0.28),
-                Color.white.opacity(0)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .frame(height: 30)
-        .offset(y: 30)
+        Rectangle()
+            .fill(PopioTheme.line.opacity(0.12))
+            .frame(height: 1)
         .allowsHitTesting(false)
     }
 }
@@ -716,6 +944,30 @@ private struct MapEventBubble: View {
         case .farmersMarket:
             return "basket.fill"
         }
+    }
+}
+
+private struct UserLocationMapPin: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(PopioTheme.accent.opacity(0.20))
+                .frame(width: 32, height: 32)
+
+            Circle()
+                .fill(Color.white)
+                .frame(width: 20, height: 20)
+
+            Circle()
+                .fill(PopioTheme.accent)
+                .frame(width: 12, height: 12)
+                .overlay {
+                    Circle()
+                        .stroke(Color.white, lineWidth: 2)
+                }
+        }
+        .shadow(color: PopioTheme.shadow.opacity(0.28), radius: 8, y: 4)
+        .accessibilityLabel("Your current location")
     }
 }
 
@@ -775,7 +1027,7 @@ private struct MapEventCarousel: View {
                         }
                     }
                     .padding(.horizontal, 14)
-                    .padding(.bottom, 10)
+                    .padding(.bottom, 8)
                 }
             }
 
@@ -785,30 +1037,7 @@ private struct MapEventCarousel: View {
         .padding(.top, 6)
         .background {
             UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            PopioTheme.surface,
-                            PopioTheme.coralSoft.opacity(0.60),
-                            PopioTheme.background
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-        }
-        .overlay(alignment: .top) {
-            LinearGradient(
-                colors: [
-                    Color.white.opacity(0),
-                    Color.white.opacity(0.48)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 18)
-            .offset(y: -18)
-            .allowsHitTesting(false)
+                .fill(PopioTheme.backgroundElevated)
         }
         .accessibilityHint("Drag down to hide nearby pop-ups")
     }
@@ -896,6 +1125,7 @@ private struct FilterPill: View {
     let text: String
     let isActive: Bool
     let showsChevron: Bool
+    let tint: Color
 
     var body: some View {
         HStack(spacing: 6) {
@@ -908,13 +1138,13 @@ private struct FilterPill: View {
             }
         }
         .font(PopioFont.caption(.bold))
-        .foregroundStyle(isActive ? .white : PopioTheme.ink)
+        .foregroundStyle(PopioTheme.ink)
         .padding(.horizontal, 12)
         .frame(height: 32)
         .background(activeBackground, in: Capsule())
         .overlay {
             Capsule()
-                .stroke(isActive ? .clear : PopioTheme.line, lineWidth: 1)
+                .stroke(isActive ? tint.opacity(0.38) : PopioTheme.line, lineWidth: 1)
         }
     }
 
@@ -922,7 +1152,7 @@ private struct FilterPill: View {
         if isActive {
             return AnyShapeStyle(
                 LinearGradient(
-                    colors: [PopioTheme.gold, PopioTheme.gold.opacity(0.82)],
+                    colors: [tint.opacity(0.24), tint.opacity(0.14)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -939,7 +1169,7 @@ struct EventCardView: View {
     @ObservedObject var session: AppSession
 
     var body: some View {
-        NavigationLink(value: event) {
+        NavigationLink(value: EventFeedRoute.detail(event)) {
             VStack(alignment: .leading, spacing: 0) {
                 EventBannerImageView(event: event)
                     .frame(maxWidth: .infinity)
@@ -1021,16 +1251,36 @@ private struct EventCardMetaRow: View {
     var body: some View {
         HStack(spacing: 5) {
             Image(systemName: systemImage)
-                .font(PopioFont.custom(size: 10, weight: .semibold))
+                .font(PopioFont.custom(size: 9.5, weight: .semibold))
                 .foregroundStyle(PopioTheme.gold)
-                .frame(width: 12)
+                .frame(width: 11)
 
             Text(text)
-                .font(PopioFont.custom(size: 10.5, weight: .medium))
+                .font(PopioFont.custom(size: 10, weight: .medium))
                 .foregroundStyle(PopioTheme.muted)
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
         }
+    }
+}
+
+private struct EventCardActionIcon: View {
+    let systemImage: String
+    let isActive: Bool
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(PopioFont.custom(size: 14, weight: .semibold))
+            .foregroundStyle(isActive ? PopioTheme.gold : PopioTheme.ink.opacity(0.72))
+            .frame(width: 31, height: 31)
+            .background(
+                (isActive ? PopioTheme.gold.opacity(0.14) : PopioTheme.backgroundElevated.opacity(0.86)),
+                in: Circle()
+            )
+            .overlay {
+                Circle()
+                    .stroke(isActive ? PopioTheme.gold.opacity(0.30) : PopioTheme.line, lineWidth: 1)
+            }
     }
 }
 
@@ -1041,11 +1291,11 @@ private struct EventCardTagRow: View {
         HStack(spacing: 6) {
             ForEach(tags, id: \.self) { tag in
                 Text(tag)
-                    .font(PopioFont.custom(size: 10, weight: .medium))
+                    .font(PopioFont.custom(size: 9.5, weight: .medium))
                     .foregroundStyle(PopioTheme.ink.opacity(0.78))
                     .lineLimit(1)
-                    .padding(.horizontal, 7)
-                    .frame(height: 22)
+                    .padding(.horizontal, 6)
+                    .frame(height: 20)
                     .background(PopioTheme.coralSoft.opacity(0.68), in: Capsule())
             }
 

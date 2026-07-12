@@ -9,7 +9,7 @@ protocol AuthenticationServicing {
     func signInWithGoogle(presenting viewController: UIViewController) async throws -> PopioUser
     func signInWithApple(idToken: String, nonce: String, fullName: PersonNameComponents?, email: String?) async throws -> PopioUser
     func logout() async throws
-    func updateProfile(userID: String, username: String, email: String, firstName: String, lastName: String, bio: String) async throws -> PopioUser
+    func updateProfile(userID: String, username: String, email: String, firstName: String, lastName: String, bio: String, instagramHandle: String) async throws -> PopioUser
     func updateProfileImageURL(userID: String, profilePictureURL: URL) async throws -> PopioUser
 }
 

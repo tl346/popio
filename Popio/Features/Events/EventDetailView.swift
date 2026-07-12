@@ -3,29 +3,17 @@ import MapKit
 import SwiftUI
 import UIKit
 
-private enum EventDetailTab: String, CaseIterable, Identifiable {
-    case pictures = "Photos"
-    case reviews = "Chat"
-
-    var id: String { rawValue }
-}
-
-private let chatComposerTabBarClearance: CGFloat = 58
-
 struct EventDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var session: AppSession
     let event: PopioEvent
-    @State private var selectedTab: EventDetailTab = .pictures
     @State private var selectedPicture: PhotosPickerItem?
     @State private var pictureData: Data?
-    @State private var reviewText = ""
     @State private var submissionMessage: String?
     @State private var isShowingMenu = false
 
     init(event: PopioEvent, opensChat: Bool = false) {
         self.event = event
-        _selectedTab = State(initialValue: opensChat ? .reviews : .pictures)
     }
 
     var body: some View {
@@ -55,7 +43,10 @@ struct EventDetailView: View {
                     in: UnevenRoundedRectangle(topLeadingRadius: 28, topTrailingRadius: 28)
                 )
                 .overlay(alignment: .topTrailing) {
-                    eventHeartButton
+                    HStack(spacing: 10) {
+                        eventHeartButton
+                        eventShareButton
+                    }
                         .padding(.trailing, 28)
                         .offset(y: -27)
                 }
@@ -70,33 +61,15 @@ struct EventDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if selectedTab == .reviews {
-                ChatInputBar(
-                    text: $reviewText,
-                    send: submitChatMessage
-                )
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 8 + chatComposerTabBarClearance)
-                .background(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0),
-                            Color.white.opacity(0.96),
-                            Color.white
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-            }
-        }
         .onChange(of: selectedPicture) { _, newValue in
             guard let newValue else { return }
 
             Task {
-                pictureData = try? await jpegData(from: newValue)
+                if let imageData = try? await jpegData(from: newValue) {
+                    session.submitContribution(for: currentEvent, type: .picture, imageData: imageData)
+                    submissionMessage = "Picture added."
+                }
+                pictureData = nil
                 selectedPicture = nil
             }
         }
@@ -106,7 +79,7 @@ struct EventDetailView: View {
         ZStack(alignment: .topLeading) {
             EventBannerImageView(event: currentEvent)
                 .frame(maxWidth: .infinity)
-                .frame(height: 320)
+                .aspectRatio(5.0 / 3.0, contentMode: .fit)
                 .clipped()
 
             LinearGradient(
@@ -135,7 +108,7 @@ struct EventDetailView: View {
             .padding(.top, 56)
             .padding(.leading, 18)
         }
-        .frame(height: 320)
+        .aspectRatio(5.0 / 3.0, contentMode: .fit)
         .ignoresSafeArea(edges: .top)
         .sheet(isPresented: $isShowingMenu) {
             EventMenuSheet(event: currentEvent)
@@ -146,15 +119,17 @@ struct EventDetailView: View {
         Button {
             session.toggleLike(for: currentEvent)
         } label: {
-            Image(systemName: session.isLikedByCurrentUser(currentEvent) ? "heart.fill" : "heart")
-                .font(PopioFont.custom(size: 21, weight: .semibold))
-                .foregroundStyle(PopioTheme.gold)
-                .frame(width: 54, height: 54)
-                .background(Color.white.opacity(0.96), in: Circle())
-                .shadow(color: PopioTheme.shadow.opacity(0.20), radius: 14, y: 7)
+            EventDetailCircleActionButton(systemImage: session.isLikedByCurrentUser(currentEvent) ? "heart.fill" : "heart")
         }
         .buttonStyle(.plain)
         .accessibilityLabel(session.isLikedByCurrentUser(currentEvent) ? "Remove interest" : "Mark interested")
+    }
+
+    private var eventShareButton: some View {
+        ShareLink(item: shareText) {
+            EventDetailCircleActionButton(systemImage: "square.and.arrow.up")
+        }
+        .accessibilityLabel("Share event")
     }
 
     private var summarySection: some View {
@@ -187,7 +162,8 @@ struct EventDetailView: View {
             EventDetailFact(
                 systemImage: "calendar",
                 title: event.eventDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()),
-                subtitle: timeText ?? "Time TBD"
+                subtitle: timeText ?? "Time TBD",
+                tint: PopioTheme.coral
             )
 
             EventDetailDivider()
@@ -195,7 +171,8 @@ struct EventDetailView: View {
             EventDetailFact(
                 systemImage: "tag",
                 title: event.category.rawValue,
-                subtitle: "Pop-up"
+                subtitle: "Pop-up",
+                tint: PopioTheme.gold
             )
 
             EventDetailDivider()
@@ -203,7 +180,8 @@ struct EventDetailView: View {
             EventDetailFact(
                 systemImage: "person.2",
                 title: "\(event.goingCount) Going",
-                subtitle: "\(approvedReviewCount) chat"
+                subtitle: "\(approvedReviewCount) chat",
+                tint: PopioTheme.accent
             )
         }
         .padding(.vertical, 12)
@@ -231,7 +209,8 @@ struct EventDetailView: View {
         .background(
             LinearGradient(
                 colors: [
-                    PopioTheme.coralSoft.opacity(0.72),
+                    PopioTheme.accentSoft.opacity(0.76),
+                    PopioTheme.coralSoft.opacity(0.62),
                     PopioTheme.backgroundElevated
                 ],
                 startPoint: .topLeading,
@@ -251,10 +230,10 @@ struct EventDetailView: View {
                 .frame(height: 46)
         }
         .foregroundStyle(PopioTheme.gold)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(PopioTheme.coralSoft.opacity(0.58), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(PopioTheme.line, lineWidth: 1)
+                .stroke(PopioTheme.coral.opacity(0.18), lineWidth: 1)
         }
         .buttonStyle(.plain)
     }
@@ -344,137 +323,77 @@ struct EventDetailView: View {
             Button {
                 session.toggleGoing(for: currentEvent)
             } label: {
-                Text(session.isGoingByCurrentUser(currentEvent) ? "Going" : "Going")
+                Label(session.isGoingByCurrentUser(currentEvent) ? "Going" : "Going", systemImage: "checkmark.circle.fill")
                     .font(PopioFont.custom(size: 15, weight: .semibold))
                     .frame(maxWidth: .infinity)
-                    .frame(height: 50)
+                    .frame(height: 48)
             }
             .foregroundStyle(.white)
-            .background(
-                LinearGradient(
-                    colors: [PopioTheme.gold, PopioTheme.gold],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                ),
-                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-            )
+            .background(eventActionGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .buttonStyle(.plain)
             .accessibilityLabel(session.isGoingByCurrentUser(currentEvent) ? "Remove going status" : "Mark as going")
 
-            ShareLink(item: shareText) {
-                Label("Share", systemImage: "square.and.arrow.up")
+            NavigationLink {
+                EventChatView(event: currentEvent)
+            } label: {
+                Label("Chat", systemImage: "bubble.left.and.bubble.right.fill")
                     .font(PopioFont.custom(size: 15, weight: .semibold))
                     .frame(maxWidth: .infinity)
-                    .frame(height: 50)
+                    .frame(height: 48)
             }
-            .foregroundStyle(PopioTheme.ink)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .foregroundStyle(.white)
+            .background(eventActionGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(PopioTheme.line, lineWidth: 1)
+                    .stroke(Color.white.opacity(0.36), lineWidth: 1)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open event chat")
         }
+    }
+
+    private var eventActionGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                PopioTheme.coral.opacity(0.86),
+                PopioTheme.gold.opacity(0.90),
+                PopioTheme.accent.opacity(0.86)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 
     private var communitySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            EventDetailSectionTitle("Community")
-
-            HStack(spacing: 8) {
-                ForEach(EventDetailTab.allCases) { tab in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            selectedTab = tab
-                        }
-                    } label: {
-                        Text(tab.rawValue)
-                            .font(PopioFont.custom(size: 13, weight: .semibold))
-                            .foregroundStyle(selectedTab == tab ? .white : PopioTheme.ink)
-                            .padding(.horizontal, 14)
-                            .frame(height: 34)
-                            .background(selectedTab == tab ? PopioTheme.gold : Color.white, in: Capsule())
-                            .overlay {
-                                Capsule()
-                                    .stroke(selectedTab == tab ? .clear : PopioTheme.line, lineWidth: 1)
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityValue(selectedTab == tab ? "Selected" : "Not selected")
-                }
-            }
-
-            switch selectedTab {
-            case .pictures:
-                picturesSection
-            case .reviews:
-                reviewsSection
-            }
+            EventDetailSectionTitle("Photos")
+            picturesSection
         }
     }
 
     private var picturesSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            PictureComposerCard(
-                imageData: pictureData,
-                category: currentEvent.category,
-                selectedPicture: $selectedPicture,
-                submit: {
-                    session.submitContribution(for: currentEvent, type: .picture, imageData: pictureData)
-                    pictureData = nil
-                    submissionMessage = "Picture added."
-                }
-            )
+        let contributions = session.approvedContributions(for: currentEvent, type: .picture)
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 5), count: 3)
 
-            contributionList(type: .picture)
-        }
-    }
-
-    private var reviewsSection: some View {
-        let messages = session.approvedContributions(for: currentEvent, type: .review).reversed()
-
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 10) {
             if let submissionMessage {
                 Text(submissionMessage)
                     .font(PopioFont.footnote(.semibold))
                     .foregroundStyle(PopioTheme.accent)
             }
 
-            ScrollViewReader { proxy in
-                ScrollView {
-                    if messages.isEmpty {
-                        ChatEmptyState()
-                    } else {
-                        VStack(spacing: 10) {
-                            ForEach(Array(messages)) { message in
-                                ChatMessageBubble(
-                                    contribution: message,
-                                    isCurrentUser: message.createdByUserID == session.currentUser?.id
-                                )
-                                .id(message.id)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
+            LazyVGrid(columns: columns, spacing: 5) {
+                PhotosPicker(selection: $selectedPicture, matching: .images) {
+                    EventPhotoAddTile()
                 }
-                .frame(height: 360)
-                .scrollIndicators(.hidden)
-                .onChange(of: messages.count) { _, _ in
-                    guard let lastID = Array(messages).last?.id else { return }
-                    withAnimation(.snappy(duration: 0.2)) {
-                        proxy.scrollTo(lastID, anchor: .bottom)
-                    }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add photo")
+
+                ForEach(contributions) { contribution in
+                    EventPhotoGridTile(contribution: contribution, category: currentEvent.category)
                 }
             }
         }
-    }
-
-    private func submitChatMessage() {
-        let trimmedText = reviewText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedText.isEmpty else { return }
-
-        session.submitContribution(for: currentEvent, type: .review, text: trimmedText)
-        reviewText = ""
-        submissionMessage = "Chat posted."
     }
 
     private func contributionList(type: EventContributionType) -> some View {
@@ -622,7 +541,8 @@ private struct EventLocationMapPreview: View {
                 LinearGradient(
                     colors: [
                         PopioTheme.gold.opacity(0.22),
-                        PopioTheme.gold.opacity(0.16)
+                        PopioTheme.accent.opacity(0.18),
+                        PopioTheme.coral.opacity(0.14)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -633,7 +553,7 @@ private struct EventLocationMapPreview: View {
                 colors: [
                     Color.white.opacity(0.12),
                     Color.white.opacity(0.0),
-                    PopioTheme.gold.opacity(0.18)
+                    PopioTheme.accent.opacity(0.16)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -661,12 +581,13 @@ private struct EventDetailFact: View {
     let systemImage: String
     let title: String
     let subtitle: String
+    let tint: Color
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Image(systemName: systemImage)
                 .font(PopioFont.custom(size: 18, weight: .medium))
-                .foregroundStyle(PopioTheme.gold)
+                .foregroundStyle(tint)
 
             Text(title)
                 .font(PopioFont.custom(size: 12.5, weight: .semibold))
@@ -690,6 +611,79 @@ private struct EventDetailDivider: View {
         Rectangle()
             .fill(PopioTheme.line)
             .frame(width: 1, height: 48)
+    }
+}
+
+private struct EventDetailCircleActionButton: View {
+    let systemImage: String
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(PopioFont.custom(size: 18, weight: .semibold))
+            .foregroundStyle(PopioTheme.gold)
+            .frame(width: 50, height: 50)
+            .background(
+                LinearGradient(
+                    colors: [
+                        PopioTheme.accentSoft.opacity(0.92),
+                        PopioTheme.coralSoft.opacity(0.72),
+                        Color.white
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: Circle()
+            )
+            .overlay {
+                Circle()
+                    .stroke(PopioTheme.gold.opacity(0.18), lineWidth: 1)
+            }
+            .shadow(color: PopioTheme.shadow.opacity(0.14), radius: 10, y: 5)
+    }
+}
+
+private struct EventPhotoAddTile: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    PopioTheme.accentSoft.opacity(0.92),
+                    PopioTheme.coralSoft.opacity(0.72),
+                    PopioTheme.gold.opacity(0.14)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            Image(systemName: "plus")
+                .font(PopioFont.custom(size: 24, weight: .semibold))
+                .foregroundStyle(PopioTheme.ink.opacity(0.76))
+                .frame(width: 44, height: 44)
+                .background(Color.white.opacity(0.70), in: Circle())
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(PopioTheme.gold.opacity(0.16), lineWidth: 1)
+        }
+    }
+}
+
+private struct EventPhotoGridTile: View {
+    let contribution: EventContribution
+    let category: EventCategory
+
+    var body: some View {
+        BannerImageView(
+            imageData: contribution.imageData,
+            imageURL: contribution.imageURL,
+            category: category,
+            focusY: 0.5
+        )
+        .aspectRatio(1, contentMode: .fill)
+        .clipped()
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
@@ -777,6 +771,138 @@ private struct TextContributionComposerCard: View {
         .overlay {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(PopioTheme.gold.opacity(0.20), lineWidth: 1)
+        }
+    }
+}
+
+struct EventChatView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var session: AppSession
+    let event: PopioEvent
+    @State private var messageText = ""
+    private let tabBarClearance: CGFloat = 62
+
+    private var currentEvent: PopioEvent {
+        session.events.first { $0.id == event.id } ?? event
+    }
+
+    private var messages: [EventContribution] {
+        session.approvedContributions(for: currentEvent, type: .review)
+            .sorted { $0.createdDate < $1.createdDate }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            chatHeader
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    if messages.isEmpty {
+                        ChatEmptyState()
+                            .padding(.horizontal, 16)
+                            .padding(.top, 48)
+                    } else {
+                        VStack(spacing: 10) {
+                            ForEach(messages) { message in
+                                ChatMessageBubble(
+                                    contribution: message,
+                                    isCurrentUser: message.createdByUserID == session.currentUser?.id
+                                )
+                                .id(message.id)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                        .padding(.bottom, 18 + tabBarClearance)
+                    }
+                }
+                .scrollIndicators(.hidden)
+                .onAppear {
+                    scrollToLatest(using: proxy)
+                }
+                .onChange(of: messages.count) { _, _ in
+                    scrollToLatest(using: proxy)
+                }
+            }
+        }
+        .background(PopioTheme.background.ignoresSafeArea())
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            ChatInputBar(
+                text: $messageText,
+                send: submitChatMessage
+            )
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 8 + tabBarClearance)
+            .background(PopioTheme.backgroundElevated)
+        }
+    }
+
+    private var chatHeader: some View {
+        HStack(spacing: 12) {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(PopioFont.custom(size: 17, weight: .semibold))
+                    .foregroundStyle(PopioTheme.ink)
+                    .frame(width: 40, height: 40)
+                    .background(Color.white, in: Circle())
+                    .overlay {
+                        Circle()
+                            .stroke(PopioTheme.line, lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back")
+
+            EventBannerImageView(event: currentEvent)
+                .frame(width: 42, height: 42)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(currentEvent.title)
+                    .font(PopioFont.custom(size: 16, weight: .semibold))
+                    .foregroundStyle(PopioTheme.ink)
+                    .lineLimit(1)
+
+                Text("Event chat")
+                    .font(PopioFont.custom(size: 12, weight: .medium))
+                    .foregroundStyle(PopioTheme.muted)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+        .background(PopioTheme.backgroundElevated)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(PopioTheme.line)
+                .frame(height: 1)
+        }
+    }
+
+    private func submitChatMessage() {
+        let trimmedText = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else { return }
+
+        session.submitContribution(for: currentEvent, type: .review, text: trimmedText)
+        messageText = ""
+    }
+
+    private func scrollToLatest(using proxy: ScrollViewProxy) {
+        guard let lastID = messages.last?.id else { return }
+
+        DispatchQueue.main.async {
+            withAnimation(.snappy(duration: 0.2)) {
+                proxy.scrollTo(lastID, anchor: .bottom)
+            }
         }
     }
 }

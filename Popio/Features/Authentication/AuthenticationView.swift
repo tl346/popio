@@ -66,7 +66,7 @@ struct AuthenticationView: View {
     }
 
     private var header: some View {
-        VStack(spacing: viewModel.isRegistering ? 10 : 18) {
+        VStack(spacing: viewModel.isRegistering ? 10 : 8) {
             AuthBrandHeader(compact: viewModel.isRegistering)
 
             if viewModel.isRegistering {
@@ -80,13 +80,6 @@ struct AuthenticationView: View {
                         .foregroundStyle(AuthPalette.muted)
                         .multilineTextAlignment(.center)
                 }
-            } else {
-                Text("Discover pop-ups. Support local. Share the vibe.")
-                    .font(PopioFont.custom(size: 16, weight: .medium))
-                    .foregroundStyle(AuthPalette.muted)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(3)
-                    .padding(.horizontal, 8)
             }
         }
         .frame(maxWidth: .infinity)
@@ -281,7 +274,7 @@ private struct AuthBrandHeader: View {
         Image("titlelogoimage")
             .resizable()
             .scaledToFit()
-            .frame(width: compact ? 300 : 360)
+            .frame(width: 360)
             .accessibilityLabel("Popio")
     }
 }

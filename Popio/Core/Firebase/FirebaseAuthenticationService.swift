@@ -142,7 +142,7 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
         try auth.signOut()
     }
 
-    func updateProfile(userID: String, username: String, email: String, firstName: String, lastName: String, bio: String) async throws -> PopioUser {
+    func updateProfile(userID: String, username: String, email: String, firstName: String, lastName: String, bio: String, instagramHandle: String) async throws -> PopioUser {
         var user = try await fetchUser(userID: userID)
         let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let normalizedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -168,6 +168,7 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
         user.firstName = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
         user.lastName = lastName.trimmingCharacters(in: .whitespacesAndNewlines)
         user.bio = bio.trimmingCharacters(in: .whitespacesAndNewlines)
+        user.instagramHandle = normalizedInstagramHandle(instagramHandle)
         user.displayName = displayName(firstName: user.firstName, lastName: user.lastName, fallback: user.username)
         try await save(user)
         return user
@@ -279,6 +280,7 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
         let firstName = data["firstName"] as? String ?? ""
         let lastName = data["lastName"] as? String ?? ""
         let bio = data["bio"] as? String ?? ""
+        let instagramHandle = data["instagramHandle"] as? String ?? ""
         let isAdmin = data["isAdmin"] as? Bool ?? false
         let createdDate = (data["createdDate"] as? Timestamp)?.dateValue() ?? .now
 
@@ -289,6 +291,7 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
             firstName: firstName,
             lastName: lastName,
             bio: bio,
+            instagramHandle: instagramHandle,
             email: email,
             profilePictureURL: profilePictureURL,
             profileImageData: nil,
@@ -305,6 +308,7 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
             "firstName": user.firstName,
             "lastName": user.lastName,
             "bio": user.bio,
+            "instagramHandle": user.instagramHandle,
             "email": user.email,
             "isAdmin": user.isAdmin,
             "createdDate": Timestamp(date: user.createdDate)
@@ -324,6 +328,16 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
             .joined(separator: " ")
 
         return fullName.isEmpty ? fallback : fullName
+    }
+
+    private func normalizedInstagramHandle(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "https://www.instagram.com/", with: "")
+            .replacingOccurrences(of: "https://instagram.com/", with: "")
+            .replacingOccurrences(of: "http://www.instagram.com/", with: "")
+            .replacingOccurrences(of: "http://instagram.com/", with: "")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "@/ "))
     }
 }
 

@@ -23,7 +23,7 @@ enum EventRadiusOption: Double, CaseIterable, Identifiable {
 }
 
 final class EventFeedViewModel: NSObject, ObservableObject {
-    @Published var locationQuery = "" {
+    @Published var locationQuery = "United States" {
         didSet {
             guard !isSelectingSuggestion else { return }
             selectedCoordinate = nil
@@ -34,8 +34,8 @@ final class EventFeedViewModel: NSObject, ObservableObject {
     @Published var selectedCoordinate: CLLocationCoordinate2D?
     @Published var userCoordinate: CLLocationCoordinate2D?
     @Published var sortOption: EventSortOption = .distance
-    @Published var radiusOption: EventRadiusOption = .ten
-    @Published var selectedCategory: EventCategory?
+    @Published var radiusOption: EventRadiusOption?
+    @Published var selectedCategories: Set<EventCategory> = []
     @Published var isOpenNowOnly = false
     @Published var eventNameQuery = ""
 
@@ -44,7 +44,7 @@ final class EventFeedViewModel: NSObject, ObservableObject {
     private var isSelectingSuggestion = false
 
     var effectiveCoordinate: CLLocationCoordinate2D? {
-        selectedCoordinate ?? userCoordinate ?? Self.dmvFallbackCoordinate
+        selectedCoordinate ?? userCoordinate ?? Self.unitedStatesFallbackCoordinate
     }
 
     var hasActiveSearch: Bool {
@@ -85,10 +85,10 @@ final class EventFeedViewModel: NSObject, ObservableObject {
         let trimmedEventNameQuery = eventNameQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
         let filtered = events.filter { event in
-            (selectedCategory == nil || event.category == selectedCategory)
+            (selectedCategories.isEmpty || selectedCategories.contains(event.category))
                 && (!isOpenNowOnly || isOpenNow(event))
                 && (trimmedEventNameQuery.isEmpty || event.title.lowercased().contains(trimmedEventNameQuery))
-                && distanceInMiles(for: event) <= radiusOption.rawValue
+                && (radiusOption == nil || distanceInMiles(for: event) <= radiusOption!.rawValue)
         }
 
         switch sortOption {
@@ -221,7 +221,7 @@ final class EventFeedViewModel: NSObject, ObservableObject {
 
     func clearSearch() {
         eventNameQuery = ""
-        locationQuery = ""
+        locationQuery = "United States"
         selectedCoordinate = nil
         locationSuggestions = []
         completer.queryFragment = ""
@@ -232,9 +232,9 @@ final class EventFeedViewModel: NSObject, ObservableObject {
         span: MKCoordinateSpan(latitudeDelta: 50, longitudeDelta: 70)
     )
 
-    private static let dmvFallbackCoordinate = CLLocationCoordinate2D(
-        latitude: 38.9072,
-        longitude: -77.0369
+    private static let unitedStatesFallbackCoordinate = CLLocationCoordinate2D(
+        latitude: 39.8283,
+        longitude: -98.5795
     )
 }
 

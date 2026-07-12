@@ -8,6 +8,7 @@ final class ProfileViewModel: ObservableObject {
     @Published var firstName = ""
     @Published var lastName = ""
     @Published var bio = ""
+    @Published var instagramHandle = ""
     @Published var errorMessage: String?
     @Published var isSaving = false
 
@@ -18,5 +19,6 @@ final class ProfileViewModel: ObservableObject {
         firstName = user.firstName
         lastName = user.lastName
         bio = user.bio
+        instagramHandle = user.instagramHandle
     }
 }

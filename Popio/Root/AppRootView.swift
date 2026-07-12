@@ -76,19 +76,6 @@ private struct LeaderboardView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 8)
                     .background(LeaderboardPalette.background)
-                    .overlay(alignment: .bottom) {
-                        LinearGradient(
-                            colors: [
-                                LeaderboardPalette.background.opacity(0),
-                                LeaderboardPalette.line.opacity(0.45)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .frame(height: 10)
-                        .offset(y: 10)
-                        .allowsHitTesting(false)
-                    }
                     .zIndex(1)
 
                 ScrollView {
@@ -492,15 +479,15 @@ private struct CompactTabBar: View {
             }
             tabButton(.profile)
         }
-        .padding(.horizontal, 11)
-        .padding(.top, 6)
+        .padding(.horizontal, 9)
+        .padding(.top, 3)
         .padding(.bottom, 0)
-        .offset(y: 8)
+        .offset(y: 6)
         .background {
             LinearGradient(
                 colors: [
                     PopioTheme.surface,
-                    PopioTheme.coralSoft.opacity(0.62),
+                    PopioTheme.gold.opacity(0.16),
                     PopioTheme.background
                 ],
                 startPoint: .top,
@@ -531,7 +518,7 @@ private struct CompactTabBar: View {
         } label: {
             tabIcon(for: tab)
             .frame(maxWidth: .infinity)
-            .frame(height: 44)
+            .frame(height: 38)
             .foregroundStyle(selectedTab == tab ? PopioTheme.gold : PopioTheme.muted)
         }
         .buttonStyle(.plain)
@@ -548,8 +535,8 @@ private struct CompactTabBar: View {
                 }
         } else {
             Image(systemName: tab.systemImage)
-                .font(PopioFont.custom(size: 20, weight: .semibold))
-                .frame(width: 44, height: 44)
+                .font(PopioFont.custom(size: 18, weight: .semibold))
+                .frame(width: 38, height: 38)
         }
     }
 
@@ -557,10 +544,10 @@ private struct CompactTabBar: View {
         Button {
             addAction()
         } label: {
-            Image(systemName: "plus.circle")
-                .font(PopioFont.custom(size: 28, weight: .medium))
+            Image(systemName: "plus.app.fill")
+                .font(PopioFont.custom(size: 25, weight: .medium))
             .frame(maxWidth: .infinity)
-            .frame(height: 44)
+            .frame(height: 38)
             .foregroundStyle(PopioTheme.gold)
         }
         .buttonStyle(.plain)

@@ -219,7 +219,7 @@ extension AppSession {
         currentUser = nil
     }
 
-    func updateProfile(username: String, email: String, firstName: String, lastName: String, bio: String) async throws {
+    func updateProfile(username: String, email: String, firstName: String, lastName: String, bio: String, instagramHandle: String) async throws {
         guard var user = currentUser else { return }
 
         if let authenticationService {
@@ -229,7 +229,8 @@ extension AppSession {
                 email: email,
                 firstName: firstName,
                 lastName: lastName,
-                bio: bio
+                bio: bio,
+                instagramHandle: instagramHandle
             )
             upsert(updatedUser)
             currentUser = updatedUser
@@ -241,6 +242,7 @@ extension AppSession {
         user.firstName = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
         user.lastName = lastName.trimmingCharacters(in: .whitespacesAndNewlines)
         user.bio = bio.trimmingCharacters(in: .whitespacesAndNewlines)
+        user.instagramHandle = Self.normalizedInstagramHandle(instagramHandle)
         user.displayName = Self.displayName(firstName: user.firstName, lastName: user.lastName, fallback: user.username)
         currentUser = user
 
@@ -317,6 +319,16 @@ extension AppSession {
             .joined(separator: " ")
 
         return fullName.isEmpty ? fallback : fullName
+    }
+
+    private static func normalizedInstagramHandle(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "https://www.instagram.com/", with: "")
+            .replacingOccurrences(of: "https://instagram.com/", with: "")
+            .replacingOccurrences(of: "http://www.instagram.com/", with: "")
+            .replacingOccurrences(of: "http://instagram.com/", with: "")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "@/ "))
     }
 }
 

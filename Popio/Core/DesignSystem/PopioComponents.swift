@@ -69,6 +69,120 @@ struct KeyboardDismissRegistrar: UIViewRepresentable {
     }
 }
 
+struct MiniMenuSheet<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Capsule()
+                .fill(PopioTheme.ink.opacity(0.14))
+                .frame(width: 42, height: 5)
+
+            Text(title)
+                .font(PopioFont.custom(size: 17, weight: .semibold))
+                .foregroundStyle(PopioTheme.ink)
+
+            VStack(spacing: 8) {
+                content
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 14)
+        .padding(.bottom, 24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(
+            LinearGradient(
+                colors: [
+                    PopioTheme.backgroundElevated,
+                    PopioTheme.gold.opacity(0.10),
+                    PopioTheme.coralSoft.opacity(0.30)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+        )
+    }
+}
+
+struct MiniMenuActionRow: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: systemImage)
+                    .font(PopioFont.custom(size: 15, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 34, height: 34)
+                    .background(tint.opacity(0.14), in: Circle())
+
+                Text(title)
+                    .font(PopioFont.custom(size: 15, weight: .semibold))
+                    .foregroundStyle(PopioTheme.ink)
+
+                Spacer()
+
+                Image(systemName: "checkmark")
+                    .font(PopioFont.custom(size: 13, weight: .bold))
+                    .foregroundStyle(tint)
+                    .opacity(0)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 52)
+            .background(Color.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(tint.opacity(0.18), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct MiniMenuChoiceRow: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: systemImage)
+                    .font(PopioFont.custom(size: 15, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 34, height: 34)
+                    .background(tint.opacity(0.14), in: Circle())
+
+                Text(title)
+                    .font(PopioFont.custom(size: 15, weight: .semibold))
+                    .foregroundStyle(PopioTheme.ink)
+
+                Spacer()
+
+                Image(systemName: "checkmark")
+                    .font(PopioFont.custom(size: 13, weight: .bold))
+                    .foregroundStyle(tint)
+                    .opacity(isSelected ? 1 : 0)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 52)
+            .background(isSelected ? tint.opacity(0.13) : Color.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(isSelected ? tint.opacity(0.34) : PopioTheme.line, lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct CategoryBadge: View {
     let category: EventCategory
 
@@ -145,15 +259,8 @@ struct ProfileAvatarView: View {
                     .resizable()
                     .scaledToFill()
             } else if let url = user?.profilePictureURL {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        fallback
-                    }
+                CachedRemoteImage(url: url) {
+                    fallback
                 }
             } else {
                 fallback
@@ -166,19 +273,6 @@ struct ProfileAvatarView: View {
                 .stroke(PopioTheme.backgroundElevated, lineWidth: max(2, size * 0.035))
         }
         .shadow(color: PopioTheme.shadow.opacity(0.55), radius: 10, y: 5)
-        .id(avatarIdentity)
-    }
-
-    private var avatarIdentity: String {
-        if let data = user?.profileImageData {
-            return "data-\(data.count)-\(data.hashValue)"
-        }
-
-        if let url = user?.profilePictureURL {
-            return "url-\(url.absoluteString)"
-        }
-
-        return "fallback-\(user?.id ?? "none")"
     }
 
     private var fallback: some View {
@@ -202,6 +296,76 @@ struct ProfileAvatarView: View {
                 .scaledToFit()
                 .foregroundStyle(Color.white.opacity(0.94))
                 .padding(size * 0.28)
+        }
+    }
+}
+
+private final class RemoteImageMemoryCache {
+    static let shared = RemoteImageMemoryCache()
+    private let cache = NSCache<NSURL, UIImage>()
+
+    func image(for url: URL) -> UIImage? {
+        cache.object(forKey: url as NSURL)
+    }
+
+    func set(_ image: UIImage, for url: URL) {
+        cache.setObject(image, forKey: url as NSURL)
+    }
+}
+
+private struct CachedRemoteImage<Fallback: View>: View {
+    let url: URL
+    let fallback: Fallback
+    @State private var image: UIImage?
+    @State private var didLoad = false
+
+    init(url: URL, @ViewBuilder fallback: () -> Fallback) {
+        self.url = url
+        self.fallback = fallback()
+        _image = State(initialValue: RemoteImageMemoryCache.shared.image(for: url))
+        _didLoad = State(initialValue: RemoteImageMemoryCache.shared.image(for: url) != nil)
+    }
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                fallback
+            }
+        }
+        .onAppear {
+            loadIfNeeded()
+        }
+        .onChange(of: url) { _, _ in
+            image = RemoteImageMemoryCache.shared.image(for: url)
+            didLoad = image != nil
+            loadIfNeeded()
+        }
+    }
+
+    private func loadIfNeeded() {
+        if let cachedImage = RemoteImageMemoryCache.shared.image(for: url) {
+            image = cachedImage
+            didLoad = true
+            return
+        }
+
+        guard !didLoad else { return }
+        didLoad = true
+
+        Task {
+            guard let (data, _) = try? await URLSession.shared.data(from: url),
+                  let loadedImage = UIImage(data: data) else {
+                return
+            }
+
+            RemoteImageMemoryCache.shared.set(loadedImage, for: url)
+            await MainActor.run {
+                image = loadedImage
+            }
         }
     }
 }
