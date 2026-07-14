@@ -57,7 +57,7 @@ struct ProfileView: View {
                         }
                     }
                 )
-                .presentationDetents([.height(135)])
+                .presentationDetents([.height(170)])
                 .presentationDragIndicator(.hidden)
             }
             .navigationDestination(for: PopioEvent.self) { event in
@@ -482,23 +482,30 @@ private struct ProfileOptionsSheet: View {
     let signOut: () -> Void
 
     var body: some View {
-        MiniMenuSheet(title: "Profile") {
-            HStack(spacing: 10) {
-                ProfileMenuButton(
-                    title: "Edit Profile",
-                    systemImage: "pencil",
-                    tint: PopioTheme.accent,
-                    action: editProfile
-                )
+        VStack(spacing: 10) {
+            Capsule()
+                .fill(Color.black.opacity(0.14))
+                .frame(width: 42, height: 5)
+                .padding(.top, 10)
 
-                ProfileMenuButton(
-                    title: "Sign Out",
-                    systemImage: "rectangle.portrait.and.arrow.right",
-                    tint: PopioTheme.coral,
-                    action: signOut
-                )
-            }
+            ProfileMenuButton(
+                title: "Edit Profile",
+                systemImage: "pencil",
+                tint: PopioTheme.accent,
+                action: editProfile
+            )
+
+            ProfileMenuButton(
+                title: "Sign Out",
+                systemImage: "rectangle.portrait.and.arrow.right",
+                tint: PopioTheme.coral,
+                action: signOut
+            )
         }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.white.ignoresSafeArea())
     }
 }
 
@@ -511,25 +518,15 @@ private struct ProfileMenuButton: View {
     var body: some View {
         Button(action: action) {
             Label(title, systemImage: systemImage)
-                .font(PopioFont.custom(size: 14, weight: .semibold))
+                .font(PopioFont.custom(size: 15, weight: .semibold))
                 .frame(maxWidth: .infinity)
-                .frame(height: 48)
+                .frame(height: 52)
         }
-        .foregroundStyle(PopioTheme.ink)
-        .background(
-            LinearGradient(
-                colors: [
-                    tint.opacity(0.24),
-                    tint.opacity(0.14)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-        )
+        .foregroundStyle(.white)
+        .background(tint, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(tint.opacity(0.32), lineWidth: 1)
+                .stroke(Color.white.opacity(0.36), lineWidth: 1)
         }
         .buttonStyle(.plain)
     }

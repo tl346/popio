@@ -1069,48 +1069,12 @@ private struct ChatMessageBubble: View {
                         .padding(.leading, 4)
                 }
 
-                Text(contribution.text.isEmpty ? "Message" : contribution.text)
-                    .font(PopioFont.custom(size: 14, weight: .medium))
-                    .foregroundStyle(isCurrentUser ? .white : PopioTheme.ink)
-                    .lineSpacing(2)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(bubbleBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay {
-                        if !isCurrentUser {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .stroke(PopioTheme.line, lineWidth: 1)
-                        }
-                    }
+                messageBubble
 
                 Text(contribution.createdDate.formatted(.dateTime.hour().minute()))
                     .font(PopioFont.custom(size: 10, weight: .medium))
                     .foregroundStyle(PopioTheme.muted.opacity(0.82))
                     .padding(.horizontal, 4)
-
-                if !isCurrentUser {
-                    Button(action: toggleLike) {
-                        HStack(spacing: 4) {
-                            Image(systemName: isLiked ? "heart.fill" : "heart")
-                                .font(PopioFont.custom(size: 11, weight: .semibold))
-                                .foregroundStyle(isLiked ? PopioTheme.coral : PopioTheme.muted)
-
-                            Text("\(likeCount)")
-                                .font(PopioFont.custom(size: 10.5, weight: .semibold))
-                                .foregroundStyle(PopioTheme.muted)
-                                .monospacedDigit()
-                        }
-                        .padding(.horizontal, 7)
-                        .frame(height: 24)
-                        .background(Color.white.opacity(0.78), in: Capsule())
-                        .overlay {
-                            Capsule()
-                                .stroke(PopioTheme.line, lineWidth: 1)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(isLiked ? "Unlike message" : "Like message")
-                }
             }
 
             if !isCurrentUser {
@@ -1118,6 +1082,50 @@ private struct ChatMessageBubble: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var messageBubble: some View {
+        Text(contribution.text.isEmpty ? "Message" : contribution.text)
+            .font(PopioFont.custom(size: 14, weight: .medium))
+            .foregroundStyle(isCurrentUser ? .white : PopioTheme.ink)
+            .lineSpacing(2)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .padding(.trailing, isCurrentUser ? 14 : 48)
+            .background(bubbleBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                if !isCurrentUser {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(PopioTheme.line, lineWidth: 1)
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if !isCurrentUser {
+                    Button(action: toggleLike) {
+                        HStack(spacing: 4) {
+                            Image(systemName: isLiked ? "heart.fill" : "heart")
+                                .font(PopioFont.custom(size: 10.5, weight: .semibold))
+                                .foregroundStyle(isLiked ? PopioTheme.coral : PopioTheme.muted)
+
+                            Text("\(likeCount)")
+                                .font(PopioFont.custom(size: 10, weight: .semibold))
+                                .foregroundStyle(PopioTheme.muted)
+                                .monospacedDigit()
+                        }
+                        .padding(.horizontal, 7)
+                        .frame(height: 22)
+                        .background(Color.white.opacity(0.86), in: Capsule())
+                        .overlay {
+                            Capsule()
+                                .stroke(PopioTheme.line, lineWidth: 1)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isLiked ? "Unlike message" : "Like message")
+                    .padding(.trailing, 6)
+                    .padding(.bottom, 5)
+                }
+            }
     }
 
     private var bubbleBackground: some ShapeStyle {
