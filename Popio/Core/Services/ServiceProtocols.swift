@@ -11,6 +11,7 @@ protocol AuthenticationServicing {
     func logout() async throws
     func deleteAccount(userID: String) async throws
     func updateProfile(userID: String, username: String, email: String, firstName: String, lastName: String, bio: String, instagramHandle: String) async throws -> PopioUser
+    func updateBlockedUserIDs(userID: String, blockedUserIDs: Set<String>) async throws -> PopioUser
     func updateProfileImageURL(userID: String, profilePictureURL: URL) async throws -> PopioUser
 }
 
@@ -29,6 +30,7 @@ protocol EventServicing {
     func createEvent(_ event: PopioEvent) async throws
     func fetchContributions(includePending: Bool) async throws -> [EventContribution]
     func createContribution(_ contribution: EventContribution) async throws
+    func createReport(_ report: UserContentReport) async throws
 }
 
 protocol ImageStorageServicing {

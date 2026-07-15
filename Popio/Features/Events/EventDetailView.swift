@@ -14,6 +14,8 @@ struct EventDetailView: View {
     @State private var isShowingMenu = false
     @State private var heartPulse = false
     @State private var expandedPhoto: EventContribution?
+    @State private var activeReportRequest: UGCReportRequest?
+    @State private var userIDToBlock: String?
 
     init(event: PopioEvent, opensChat: Bool = false, isAdminReview: Bool = false) {
         self.event = event
@@ -62,6 +64,33 @@ struct EventDetailView: View {
                 category: currentEvent.category
             )
             .environmentObject(session)
+        }
+        .sheet(item: $activeReportRequest) { request in
+            UGCReportSheet(request: request)
+                .environmentObject(session)
+                .presentationDetents([.height(360)])
+                .presentationDragIndicator(.hidden)
+        }
+        .confirmationDialog(
+            "Block this user?",
+            isPresented: Binding(
+                get: { userIDToBlock != nil },
+                set: { if !$0 { userIDToBlock = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Block User", role: .destructive) {
+                if let userIDToBlock {
+                    session.blockUser(userIDToBlock)
+                    self.userIDToBlock = nil
+                }
+            }
+
+            Button("Cancel", role: .cancel) {
+                userIDToBlock = nil
+            }
+        } message: {
+            Text("You will no longer see this user's pop-ups, photos, or chat messages.")
         }
     }
 
@@ -123,8 +152,38 @@ struct EventDetailView: View {
 
             Spacer()
 
+            safetyMenu
             eventHeartButton
             eventShareButton
+        }
+    }
+
+    @ViewBuilder
+    private var safetyMenu: some View {
+        if let creator = session.users.first(where: { $0.id == currentEvent.createdByUserID }),
+           creator.id != session.currentUser?.id {
+            Menu {
+                Button(role: .destructive) {
+                    activeReportRequest = UGCReportRequest(
+                        targetType: .event,
+                        targetID: currentEvent.id,
+                        reportedUserID: creator.id,
+                        reportedUsername: creator.username,
+                        title: "Report Pop-up"
+                    )
+                } label: {
+                    Label("Report Pop-up", systemImage: "flag")
+                }
+
+                Button(role: .destructive) {
+                    userIDToBlock = creator.id
+                } label: {
+                    Label("Block @\(creator.username)", systemImage: "hand.raised")
+                }
+            } label: {
+                EventDetailCircleActionButton(systemImage: "ellipsis", foreground: PopioTheme.ink, background: .white)
+            }
+            .accessibilityLabel("Safety options")
         }
     }
 
@@ -469,7 +528,7 @@ struct EventDetailView: View {
     }
 
     private var picturesSection: some View {
-        let contributions = session.approvedContributions(for: currentEvent, type: .picture)
+        let contributions = visiblePictureContributions
         let columns = Array(repeating: GridItem(.flexible(), spacing: 5), count: 3)
 
         return VStack(alignment: .leading, spacing: 10) {
@@ -490,7 +549,11 @@ struct EventDetailView: View {
                     Button {
                         expandedPhoto = contribution
                     } label: {
-                        EventPhotoGridTile(contribution: contribution, category: currentEvent.category)
+                        EventPhotoGridTile(
+                            contribution: contribution,
+                            category: currentEvent.category,
+                            isPending: contribution.moderationStatus == .pending
+                        )
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("View photo by \(contribution.creatorUsername)")
@@ -590,6 +653,21 @@ struct EventDetailView: View {
 
     private var currentEvent: PopioEvent {
         session.events.first { $0.id == event.id } ?? event
+    }
+
+    private var visiblePictureContributions: [EventContribution] {
+        session.eventContributions
+            .filter { contribution in
+                guard contribution.eventID == currentEvent.id, contribution.type == .picture else { return false }
+
+                if contribution.moderationStatus == .approved {
+                    return true
+                }
+
+                return contribution.moderationStatus == .pending
+                    && contribution.createdByUserID == session.currentUser?.id
+            }
+            .sorted { $0.createdDate > $1.createdDate }
     }
 
     private var descriptionText: String {
@@ -861,17 +939,30 @@ private struct EventPhotoAddTile: View {
 private struct EventPhotoGridTile: View {
     let contribution: EventContribution
     let category: EventCategory
+    var isPending = false
 
     var body: some View {
-        BannerImageView(
-            imageData: contribution.imageData,
-            imageURL: contribution.imageURL,
-            category: category,
-            focusY: 0.5
-        )
-        .aspectRatio(1, contentMode: .fill)
-        .clipped()
-        .clipShape(Rectangle())
+        ZStack(alignment: .topLeading) {
+            BannerImageView(
+                imageData: contribution.imageData,
+                imageURL: contribution.imageURL,
+                category: category,
+                focusY: 0.5
+            )
+            .aspectRatio(1, contentMode: .fill)
+            .clipped()
+            .clipShape(Rectangle())
+
+            if isPending {
+                Text("Pending")
+                    .font(PopioFont.custom(size: 10, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 7)
+                    .frame(height: 22)
+                    .background(Color.black.opacity(0.54), in: Capsule())
+                    .padding(6)
+            }
+        }
     }
 }
 
@@ -880,6 +971,8 @@ private struct EventExpandedPhotoView: View {
     @EnvironmentObject private var session: AppSession
     let contribution: EventContribution
     let category: EventCategory
+    @State private var activeReportRequest: UGCReportRequest?
+    @State private var isConfirmingBlock = false
 
     private var currentContribution: EventContribution {
         session.eventContributions.first { $0.id == contribution.id } ?? contribution
@@ -910,7 +1003,17 @@ private struct EventExpandedPhotoView: View {
 
                     Spacer()
 
-                    photoLikeButton
+                    HStack(spacing: 8) {
+                        if currentContribution.createdByUserID != session.currentUser?.id {
+                            photoSafetyMenu
+                        }
+
+                        if currentContribution.moderationStatus == .approved {
+                            photoLikeButton
+                        } else {
+                            pendingReviewBadge
+                        }
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
@@ -935,6 +1038,55 @@ private struct EventExpandedPhotoView: View {
                 .padding(.bottom, 28)
             }
         }
+        .sheet(item: $activeReportRequest) { request in
+            UGCReportSheet(request: request)
+                .environmentObject(session)
+                .presentationDetents([.height(360)])
+                .presentationDragIndicator(.hidden)
+        }
+        .confirmationDialog(
+            "Block this user?",
+            isPresented: $isConfirmingBlock,
+            titleVisibility: .visible
+        ) {
+            Button("Block User", role: .destructive) {
+                session.blockUser(currentContribution.createdByUserID)
+                dismiss()
+            }
+
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You will no longer see this user's pop-ups, photos, or chat messages.")
+        }
+    }
+
+    private var photoSafetyMenu: some View {
+        Menu {
+            Button(role: .destructive) {
+                activeReportRequest = UGCReportRequest(
+                    targetType: .photo,
+                    targetID: currentContribution.id,
+                    reportedUserID: currentContribution.createdByUserID,
+                    reportedUsername: currentContribution.creatorUsername,
+                    title: "Report Photo"
+                )
+            } label: {
+                Label("Report Photo", systemImage: "flag")
+            }
+
+            Button(role: .destructive) {
+                isConfirmingBlock = true
+            } label: {
+                Label("Block @\(currentContribution.creatorUsername)", systemImage: "hand.raised")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(PopioFont.custom(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 40, height: 40)
+                .background(Color.black.opacity(0.42), in: Circle())
+        }
+        .accessibilityLabel("Photo safety options")
     }
 
     private var photoLikeButton: some View {
@@ -956,6 +1108,161 @@ private struct EventExpandedPhotoView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(session.isLikedByCurrentUser(currentContribution) ? "Unlike photo" : "Like photo")
+    }
+
+    private var pendingReviewBadge: some View {
+        Text("Pending review")
+            .font(PopioFont.custom(size: 13, weight: .semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .frame(height: 40)
+            .background(Color.black.opacity(0.42), in: Capsule())
+    }
+}
+
+struct UGCReportRequest: Identifiable, Hashable {
+    let id = UUID()
+    let targetType: UserContentReportTargetType
+    let targetID: String
+    let reportedUserID: String
+    let reportedUsername: String
+    let title: String
+}
+
+private struct UGCReportSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var session: AppSession
+    let request: UGCReportRequest
+    @State private var selectedReason = "Inappropriate content"
+    @State private var details = ""
+    @State private var didSubmit = false
+
+    private let reasons = [
+        "Inappropriate content",
+        "Harassment or hate",
+        "Spam or scam",
+        "False or misleading",
+        "Other"
+    ]
+    private let characterLimit = 500
+    private let adminEmail = "popioadmin@gmail.com"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Capsule()
+                .fill(Color.black.opacity(0.14))
+                .frame(width: 42, height: 5)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 10)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(request.title)
+                    .font(PopioFont.custom(size: 18, weight: .semibold))
+                    .foregroundStyle(PopioTheme.ink)
+
+                Text("Report @\(request.reportedUsername). Our team will review this.")
+                    .font(PopioFont.custom(size: 12.5, weight: .medium))
+                    .foregroundStyle(PopioTheme.muted)
+            }
+
+            Picker("Reason", selection: $selectedReason) {
+                ForEach(reasons, id: \.self) { reason in
+                    Text(reason).tag(reason)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(PopioTheme.gold)
+
+            TextField("Add details for the reviewer...", text: $details, axis: .vertical)
+                .lineLimit(4...6)
+                .font(PopioFont.custom(size: 14, weight: .medium))
+                .padding(14)
+                .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(PopioTheme.line, lineWidth: 1)
+                }
+                .onChange(of: details) { _, newValue in
+                    if newValue.count > characterLimit {
+                        details = String(newValue.prefix(characterLimit))
+                    }
+                }
+
+            HStack {
+                Text("\(details.count)/\(characterLimit)")
+                    .font(PopioFont.custom(size: 11, weight: .medium))
+                    .foregroundStyle(PopioTheme.muted)
+                    .monospacedDigit()
+
+                Spacer()
+
+                if didSubmit {
+                    Text("Report submitted.")
+                        .font(PopioFont.custom(size: 12, weight: .semibold))
+                        .foregroundStyle(PopioTheme.accent)
+                }
+            }
+
+            Button {
+                session.reportContent(
+                    targetType: request.targetType,
+                    targetID: request.targetID,
+                    reportedUserID: request.reportedUserID,
+                    reason: selectedReason,
+                    details: details
+                )
+                openReportEmail()
+                didSubmit = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+                    dismiss()
+                }
+            } label: {
+                Label("Submit Report", systemImage: "flag.fill")
+                    .font(PopioFont.custom(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(PopioTheme.coral, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(didSubmit)
+            .opacity(didSubmit ? 0.65 : 1)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 14)
+        .background(PopioTheme.background.ignoresSafeArea())
+    }
+
+    private func openReportEmail() {
+        let body = """
+        Popio UGC Report
+
+        Type: \(request.targetType.rawValue)
+        Target ID: \(request.targetID)
+        Reported User: @\(request.reportedUsername)
+        Reported User ID: \(request.reportedUserID)
+        Reporter ID: \(session.currentUser?.id ?? "Unknown")
+        Reason: \(selectedReason)
+
+        Details:
+        \(details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "None provided" : details.trimmingCharacters(in: .whitespacesAndNewlines))
+        """
+
+        openAdminEmail(subject: "Popio Report - \(request.targetType.rawValue)", body: body)
+    }
+
+    private func openAdminEmail(subject: String, body: String) {
+        var components = URLComponents()
+        components.scheme = "mailto"
+        components.path = adminEmail
+        components.queryItems = [
+            URLQueryItem(name: "subject", value: subject),
+            URLQueryItem(name: "body", value: body)
+        ]
+
+        guard let url = components.url else { return }
+        UIApplication.shared.open(url)
     }
 }
 
@@ -1052,6 +1359,8 @@ struct EventChatView: View {
     @EnvironmentObject private var session: AppSession
     let event: PopioEvent
     @State private var messageText = ""
+    @State private var activeReportRequest: UGCReportRequest?
+    @State private var userIDToBlock: String?
     private let tabBarClearance: CGFloat = 46
 
     private var currentEvent: PopioEvent {
@@ -1087,6 +1396,18 @@ struct EventChatView: View {
                                     likeCount: message.likeCount,
                                     toggleLike: {
                                         session.toggleLike(for: message)
+                                    },
+                                    report: {
+                                        activeReportRequest = UGCReportRequest(
+                                            targetType: .chatMessage,
+                                            targetID: message.id,
+                                            reportedUserID: message.createdByUserID,
+                                            reportedUsername: message.creatorUsername,
+                                            title: "Report Message"
+                                        )
+                                    },
+                                    block: {
+                                        userIDToBlock = message.createdByUserID
                                     }
                                 )
                                 .id(message.id)
@@ -1129,6 +1450,33 @@ struct EventChatView: View {
             .padding(.top, 4)
             .padding(.bottom, 4 + tabBarClearance)
             .background(PopioTheme.backgroundElevated)
+        }
+        .sheet(item: $activeReportRequest) { request in
+            UGCReportSheet(request: request)
+                .environmentObject(session)
+                .presentationDetents([.height(360)])
+                .presentationDragIndicator(.hidden)
+        }
+        .confirmationDialog(
+            "Block this user?",
+            isPresented: Binding(
+                get: { userIDToBlock != nil },
+                set: { if !$0 { userIDToBlock = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Block User", role: .destructive) {
+                if let userIDToBlock {
+                    session.blockUser(userIDToBlock)
+                    self.userIDToBlock = nil
+                }
+            }
+
+            Button("Cancel", role: .cancel) {
+                userIDToBlock = nil
+            }
+        } message: {
+            Text("You will no longer see this user's pop-ups, photos, or chat messages.")
         }
     }
 
@@ -1203,6 +1551,8 @@ private struct ChatMessageBubble: View {
     let isLiked: Bool
     let likeCount: Int
     let toggleLike: () -> Void
+    let report: () -> Void
+    let block: () -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
@@ -1219,6 +1569,24 @@ private struct ChatMessageBubble: View {
                 }
 
                 messageBubble
+
+                if !isCurrentUser {
+                    HStack(spacing: 10) {
+                        Button(action: report) {
+                            Label("Report", systemImage: "flag")
+                                .labelStyle(.titleAndIcon)
+                        }
+
+                        Button(action: block) {
+                            Label("Block", systemImage: "hand.raised")
+                                .labelStyle(.titleAndIcon)
+                        }
+                    }
+                    .font(PopioFont.custom(size: 10.5, weight: .semibold))
+                    .foregroundStyle(PopioTheme.muted)
+                    .padding(.horizontal, 4)
+                    .buttonStyle(.plain)
+                }
 
                 Text(contribution.createdDate.formatted(.dateTime.hour().minute()))
                     .font(PopioFont.custom(size: 10, weight: .medium))

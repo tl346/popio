@@ -12,6 +12,7 @@ struct PopioUser: Identifiable, Hashable {
     var profilePictureURL: URL?
     var profileImageData: Data?
     var isAdmin: Bool
+    var blockedUserIDs: Set<String> = []
     let createdDate: Date
 }
 
@@ -27,6 +28,7 @@ extension PopioUser {
         profilePictureURL: nil,
         profileImageData: nil,
         isAdmin: true,
+        blockedUserIDs: [],
         createdDate: .now
     )
 }

@@ -37,6 +37,7 @@ final class AppSession: ObservableObject {
                 profilePictureURL: nil,
                 profileImageData: nil,
                 isAdmin: false,
+                blockedUserIDs: [],
                 createdDate: .now
             ),
             PopioUser(
@@ -50,6 +51,7 @@ final class AppSession: ObservableObject {
                 profilePictureURL: nil,
                 profileImageData: nil,
                 isAdmin: false,
+                blockedUserIDs: [],
                 createdDate: .now
             ),
             PopioUser(
@@ -63,6 +65,7 @@ final class AppSession: ObservableObject {
                 profilePictureURL: nil,
                 profileImageData: nil,
                 isAdmin: false,
+                blockedUserIDs: [],
                 createdDate: .now
             )
         ]
@@ -151,11 +154,12 @@ extension AppSession {
             lastName: trimmedLastName,
             bio: "",
             email: email.trimmingCharacters(in: .whitespacesAndNewlines),
-            profilePictureURL: nil,
-            profileImageData: nil,
-            isAdmin: false,
-            createdDate: .now
-        )
+                profilePictureURL: nil,
+                profileImageData: nil,
+                isAdmin: false,
+                blockedUserIDs: [],
+                createdDate: .now
+            )
         users.append(user)
         currentUser = user
     }
@@ -396,6 +400,7 @@ extension AppSession {
 
         return users.filter { user in
             user.id != currentUser.id
+                && !isBlocked(user.id)
                 && (trimmed.isEmpty
                     || user.username.lowercased().contains(trimmed)
                     || user.displayName.lowercased().contains(trimmed))
@@ -414,6 +419,7 @@ extension AppSession {
 
     func relationshipState(with user: PopioUser) -> RelationshipState {
         guard let currentUser else { return .none }
+        guard !currentUser.blockedUserIDs.contains(user.id) else { return .none }
 
         if friendRequests.contains(where: { request in
             request.status == .accepted
@@ -443,6 +449,7 @@ extension AppSession {
 
     func sendFriendRequest(to user: PopioUser) {
         guard let currentUser else { return }
+        guard !currentUser.blockedUserIDs.contains(user.id) else { return }
         guard !friendRequests.contains(where: { request in
             Set([request.fromUserID, request.toUserID]) == Set([currentUser.id, user.id])
                 && request.status != .declined
@@ -495,6 +502,33 @@ extension AppSession {
         }
     }
 
+    func isBlocked(_ userID: String) -> Bool {
+        currentUser?.blockedUserIDs.contains(userID) == true
+    }
+
+    func blockUser(_ userID: String) {
+        guard var user = currentUser, user.id != userID else { return }
+        user.blockedUserIDs.insert(userID)
+        currentUser = user
+        upsert(user)
+
+        friendRequests.removeAll { request in
+            request.fromUserID == userID || request.toUserID == userID
+        }
+
+        if let authenticationService {
+            Task {
+                if let updatedUser = try? await authenticationService.updateBlockedUserIDs(
+                    userID: user.id,
+                    blockedUserIDs: user.blockedUserIDs
+                ) {
+                    upsert(updatedUser)
+                    currentUser = updatedUser
+                }
+            }
+        }
+    }
+
     private func updateFriendRequest(_ request: FriendRequest, status: FriendRequestStatus) {
         guard let index = friendRequests.firstIndex(where: { $0.id == request.id }) else { return }
         var updatedRequests = friendRequests
@@ -515,7 +549,7 @@ extension AppSession {
 
     var approvedEvents: [PopioEvent] {
         events
-            .filter { $0.moderationStatus == .approved }
+            .filter { $0.moderationStatus == .approved && !isBlocked($0.createdByUserID) }
             .sorted { $0.eventDate < $1.eventDate }
     }
 
@@ -528,8 +562,8 @@ extension AppSession {
     }
 
     private func mvpLeaderboard(in dateInterval: DateInterval?) -> [MVPStanding] {
-        let approvedEvents = events.filter { $0.moderationStatus == .approved }
-        let approvedContributions = eventContributions.filter { $0.moderationStatus == .approved }
+        let approvedEvents = events.filter { $0.moderationStatus == .approved && !isBlocked($0.createdByUserID) }
+        let approvedContributions = eventContributions.filter { $0.moderationStatus == .approved && !isBlocked($0.createdByUserID) }
 
         let eventPoints = Dictionary(grouping: approvedEvents, by: \.createdByUserID)
             .mapValues { creatorEvents in
@@ -746,8 +780,38 @@ extension AppSession {
                 $0.eventID == event.id
                     && $0.type == type
                     && $0.moderationStatus == .approved
+                    && !isBlocked($0.createdByUserID)
             }
             .sorted { $0.createdDate > $1.createdDate }
+    }
+
+    func reportContent(
+        targetType: UserContentReportTargetType,
+        targetID: String,
+        reportedUserID: String,
+        reason: String,
+        details: String = ""
+    ) {
+        guard let currentUser else { return }
+        guard currentUser.id != reportedUserID else { return }
+
+        let report = UserContentReport(
+            id: UUID().uuidString,
+            reporterUserID: currentUser.id,
+            reportedUserID: reportedUserID,
+            targetType: targetType,
+            targetID: targetID,
+            reason: reason.trimmingCharacters(in: .whitespacesAndNewlines),
+            details: details.trimmingCharacters(in: .whitespacesAndNewlines),
+            status: .open,
+            createdDate: .now
+        )
+
+        if let eventService {
+            Task {
+                try? await eventService.createReport(report)
+            }
+        }
     }
 
     func submitContribution(

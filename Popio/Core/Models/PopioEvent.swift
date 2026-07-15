@@ -93,6 +93,34 @@ struct PopioEvent: Identifiable, Hashable {
     }
 }
 
+enum UserContentReportTargetType: String, CaseIterable, Identifiable {
+    case event
+    case photo
+    case chatMessage
+    case user
+
+    var id: String { rawValue }
+}
+
+enum UserContentReportStatus: String, CaseIterable, Identifiable {
+    case open
+    case reviewed
+
+    var id: String { rawValue }
+}
+
+struct UserContentReport: Identifiable, Hashable {
+    let id: String
+    let reporterUserID: String
+    let reportedUserID: String
+    let targetType: UserContentReportTargetType
+    let targetID: String
+    let reason: String
+    let details: String
+    var status: UserContentReportStatus
+    let createdDate: Date
+}
+
 extension PopioEvent {
     static let samples: [PopioEvent] = [
         PopioEvent(

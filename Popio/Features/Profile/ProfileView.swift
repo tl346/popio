@@ -64,6 +64,12 @@ struct ProfileView: View {
                             activeSupportSheet = .bug
                         }
                     },
+                    contactSupport: {
+                        isShowingProfileMenu = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                            activeSupportSheet = .contact
+                        }
+                    },
                     signOut: {
                         isShowingProfileMenu = false
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
@@ -71,7 +77,7 @@ struct ProfileView: View {
                         }
                     }
                 )
-                .presentationDetents([.height(300)])
+                .presentationDetents([.height(360)])
                 .presentationDragIndicator(.hidden)
             }
             .confirmationDialog(
@@ -513,6 +519,7 @@ private struct ProfileOptionsSheet: View {
     let editProfile: () -> Void
     let submitFeedback: () -> Void
     let reportBug: () -> Void
+    let contactSupport: () -> Void
     let signOut: () -> Void
 
     var body: some View {
@@ -541,6 +548,13 @@ private struct ProfileOptionsSheet: View {
                 systemImage: "ladybug",
                 tint: PopioTheme.coral,
                 action: reportBug
+            )
+
+            ProfileMenuButton(
+                title: "Contact Support",
+                systemImage: "envelope",
+                tint: PopioTheme.accent,
+                action: contactSupport
             )
 
             ProfileMenuButton(
@@ -590,6 +604,7 @@ private struct ProfileMenuButton: View {
 private enum ProfileSupportRequestType: String, Identifiable {
     case feedback
     case bug
+    case contact
 
     var id: String { rawValue }
 
@@ -599,6 +614,8 @@ private enum ProfileSupportRequestType: String, Identifiable {
             return "Submit Feedback"
         case .bug:
             return "Report Bug"
+        case .contact:
+            return "Contact Support"
         }
     }
 
@@ -608,6 +625,8 @@ private enum ProfileSupportRequestType: String, Identifiable {
             return "Tell us what would make Popio better."
         case .bug:
             return "Describe what happened and how to reproduce it."
+        case .contact:
+            return "For moderation, safety, or account help, contact popioadmin@gmail.com."
         }
     }
 
@@ -617,6 +636,8 @@ private enum ProfileSupportRequestType: String, Identifiable {
             return "Share your feedback..."
         case .bug:
             return "Describe the bug..."
+        case .contact:
+            return "Tell us how we can help..."
         }
     }
 
@@ -626,6 +647,8 @@ private enum ProfileSupportRequestType: String, Identifiable {
             return "text.bubble.fill"
         case .bug:
             return "ladybug.fill"
+        case .contact:
+            return "envelope.fill"
         }
     }
 
@@ -635,6 +658,8 @@ private enum ProfileSupportRequestType: String, Identifiable {
             return PopioTheme.gold
         case .bug:
             return PopioTheme.coral
+        case .contact:
+            return PopioTheme.accent
         }
     }
 }
@@ -646,6 +671,7 @@ private struct FeedbackFormSheet: View {
     @State private var didSubmit = false
 
     private let characterLimit = 500
+    private let adminEmail = "popioadmin@gmail.com"
 
     var body: some View {
         VStack(spacing: 14) {
@@ -705,6 +731,7 @@ private struct FeedbackFormSheet: View {
             }
 
             Button {
+                openSupportEmail()
                 didSubmit = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                     dismiss()
@@ -740,6 +767,28 @@ private struct FeedbackFormSheet: View {
             guard newValue.count > characterLimit else { return }
             message = String(newValue.prefix(characterLimit))
         }
+    }
+
+    private func openSupportEmail() {
+        let body = """
+        Popio \(type.title)
+
+        Category: \(type.title)
+
+        Message:
+        \(message.trimmingCharacters(in: .whitespacesAndNewlines))
+        """
+
+        var components = URLComponents()
+        components.scheme = "mailto"
+        components.path = adminEmail
+        components.queryItems = [
+            URLQueryItem(name: "subject", value: "Popio \(type.title)"),
+            URLQueryItem(name: "body", value: body)
+        ]
+
+        guard let url = components.url else { return }
+        UIApplication.shared.open(url)
     }
 }
 

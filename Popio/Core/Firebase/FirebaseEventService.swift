@@ -42,6 +42,10 @@ struct FirebaseEventService: EventServicing {
         try await database.collection("eventContributions").document(contribution.id).setData(data(from: contribution), merge: true)
     }
 
+    func createReport(_ report: UserContentReport) async throws {
+        try await database.collection("contentReports").document(report.id).setData(data(from: report), merge: true)
+    }
+
     private func event(from document: QueryDocumentSnapshot) throws -> PopioEvent {
         let data = document.data()
 
@@ -259,6 +263,20 @@ struct FirebaseEventService: EventServicing {
         }
 
         return fallbackDates
+    }
+
+    private func data(from report: UserContentReport) -> [String: Any] {
+        [
+            "id": report.id,
+            "reporterUserID": report.reporterUserID,
+            "reportedUserID": report.reportedUserID,
+            "targetType": report.targetType.rawValue,
+            "targetID": report.targetID,
+            "reason": report.reason,
+            "details": report.details,
+            "status": report.status.rawValue,
+            "createdDate": Timestamp(date: report.createdDate)
+        ]
     }
 }
 

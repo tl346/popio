@@ -54,6 +54,7 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
             profilePictureURL: nil,
             profileImageData: nil,
             isAdmin: false,
+            blockedUserIDs: [],
             createdDate: .now
         )
 
@@ -64,6 +65,13 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
     func updateProfileImageURL(userID: String, profilePictureURL: URL) async throws -> PopioUser {
         var user = try await fetchUser(userID: userID)
         user.profilePictureURL = profilePictureURL
+        try await save(user)
+        return user
+    }
+
+    func updateBlockedUserIDs(userID: String, blockedUserIDs: Set<String>) async throws -> PopioUser {
+        var user = try await fetchUser(userID: userID)
+        user.blockedUserIDs = blockedUserIDs
         try await save(user)
         return user
     }
@@ -238,6 +246,7 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
             profilePictureURL: profilePictureURL,
             profileImageData: nil,
             isAdmin: false,
+            blockedUserIDs: [],
             createdDate: .now
         )
 
@@ -296,6 +305,7 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
         let bio = data["bio"] as? String ?? ""
         let instagramHandle = data["instagramHandle"] as? String ?? ""
         let isAdmin = data["isAdmin"] as? Bool ?? false
+        let blockedUserIDs = Set(data["blockedUserIDs"] as? [String] ?? [])
         let createdDate = (data["createdDate"] as? Timestamp)?.dateValue() ?? .now
 
         return PopioUser(
@@ -310,6 +320,7 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
             profilePictureURL: profilePictureURL,
             profileImageData: nil,
             isAdmin: isAdmin,
+            blockedUserIDs: blockedUserIDs,
             createdDate: createdDate
         )
     }
@@ -325,6 +336,7 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
             "instagramHandle": user.instagramHandle,
             "email": user.email,
             "isAdmin": user.isAdmin,
+            "blockedUserIDs": Array(user.blockedUserIDs),
             "createdDate": Timestamp(date: user.createdDate)
         ]
 
