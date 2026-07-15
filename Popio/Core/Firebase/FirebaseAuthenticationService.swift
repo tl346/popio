@@ -348,8 +348,18 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
         let incomingRequests = try await database.collection("friendRequests")
             .whereField("toUserID", isEqualTo: userID)
             .getDocuments()
-        let allEvents = try await database.collection("events").getDocuments()
-        let allContributions = try await database.collection("eventContributions").getDocuments()
+        let likedEvents = try await database.collection("events")
+            .whereField("moderationStatus", isEqualTo: EventModerationStatus.approved.rawValue)
+            .whereField("likedUserIDs", arrayContains: userID)
+            .getDocuments()
+        let goingEvents = try await database.collection("events")
+            .whereField("moderationStatus", isEqualTo: EventModerationStatus.approved.rawValue)
+            .whereField("goingUserIDs", arrayContains: userID)
+            .getDocuments()
+        let likedContributions = try await database.collection("eventContributions")
+            .whereField("moderationStatus", isEqualTo: EventModerationStatus.approved.rawValue)
+            .whereField("likedUserIDs", arrayContains: userID)
+            .getDocuments()
         let storageService = FirebaseImageStorageService()
 
         try? await storageService.deleteProfileImage(userID: userID)
@@ -378,7 +388,14 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
             batch.deleteDocument(document.reference)
         }
 
-        for document in allEvents.documents where document.data()["createdByUserID"] as? String != userID {
+        let referencedEvents = (likedEvents.documents + goingEvents.documents).reduce(into: [String: QueryDocumentSnapshot]()) { result, document in
+            result[document.documentID] = document
+        }.values
+        let referencedContributions = likedContributions.documents.reduce(into: [String: QueryDocumentSnapshot]()) { result, document in
+            result[document.documentID] = document
+        }.values
+
+        for document in referencedEvents where document.data()["createdByUserID"] as? String != userID {
             var updates: [String: Any] = [:]
 
             if var likedUserIDs = document.data()["likedUserIDs"] as? [String], likedUserIDs.contains(userID) {
@@ -401,7 +418,7 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
             }
         }
 
-        for document in allContributions.documents where document.data()["createdByUserID"] as? String != userID {
+        for document in referencedContributions where document.data()["createdByUserID"] as? String != userID {
             var updates: [String: Any] = [:]
 
             if var likedUserIDs = document.data()["likedUserIDs"] as? [String], likedUserIDs.contains(userID) {

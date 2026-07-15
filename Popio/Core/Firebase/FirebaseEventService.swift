@@ -8,10 +8,12 @@ struct FirebaseEventService: EventServicing {
         self.database = database
     }
 
-    func fetchApprovedEvents() async throws -> [PopioEvent] {
-        let snapshot = try await database.collection("events")
-            .whereField("moderationStatus", isEqualTo: EventModerationStatus.approved.rawValue)
-            .getDocuments()
+    func fetchEvents(includePending: Bool) async throws -> [PopioEvent] {
+        let query: Query = includePending
+            ? database.collection("events")
+            : database.collection("events")
+                .whereField("moderationStatus", isEqualTo: EventModerationStatus.approved.rawValue)
+        let snapshot = try await query.getDocuments()
 
         return snapshot.documents.compactMap { document in
             try? event(from: document)
@@ -23,10 +25,12 @@ struct FirebaseEventService: EventServicing {
         try await database.collection("events").document(event.id).setData(data(from: event), merge: true)
     }
 
-    func fetchContributions() async throws -> [EventContribution] {
-        let snapshot = try await database.collection("eventContributions")
-            .whereField("moderationStatus", isEqualTo: EventModerationStatus.approved.rawValue)
-            .getDocuments()
+    func fetchContributions(includePending: Bool) async throws -> [EventContribution] {
+        let query: Query = includePending
+            ? database.collection("eventContributions")
+            : database.collection("eventContributions")
+                .whereField("moderationStatus", isEqualTo: EventModerationStatus.approved.rawValue)
+        let snapshot = try await query.getDocuments()
 
         return snapshot.documents.compactMap { document in
             try? contribution(from: document)

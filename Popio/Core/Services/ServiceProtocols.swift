@@ -25,9 +25,9 @@ protocol FriendServicing {
 }
 
 protocol EventServicing {
-    func fetchApprovedEvents() async throws -> [PopioEvent]
+    func fetchEvents(includePending: Bool) async throws -> [PopioEvent]
     func createEvent(_ event: PopioEvent) async throws
-    func fetchContributions() async throws -> [EventContribution]
+    func fetchContributions(includePending: Bool) async throws -> [EventContribution]
     func createContribution(_ contribution: EventContribution) async throws
 }
 

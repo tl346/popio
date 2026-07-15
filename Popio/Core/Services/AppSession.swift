@@ -321,7 +321,7 @@ extension AppSession {
 
     private func loadPersistedEvents() async throws {
         guard let eventService else { return }
-        let persistedEvents = try await eventService.fetchApprovedEvents()
+        let persistedEvents = try await eventService.fetchEvents(includePending: currentUser?.isAdmin == true)
         let sampleEventsByID = Dictionary(uniqueKeysWithValues: PopioEvent.samples.map { ($0.id, $0) })
         let persistedIDs = Set(persistedEvents.map(\.id))
         let localOnlySamples = sampleEventsByID.values.filter { !persistedIDs.contains($0.id) }
@@ -330,7 +330,7 @@ extension AppSession {
 
     private func loadPersistedContributions() async throws {
         guard let eventService else { return }
-        let persistedContributions = try await eventService.fetchContributions()
+        let persistedContributions = try await eventService.fetchContributions(includePending: currentUser?.isAdmin == true)
         let sampleContributionsByID = Dictionary(uniqueKeysWithValues: eventContributions.map { ($0.id, $0) })
         let persistedIDs = Set(persistedContributions.map(\.id))
         let localOnlySamples = sampleContributionsByID.values.filter { !persistedIDs.contains($0.id) }
@@ -704,8 +704,8 @@ extension AppSession {
             bannerFocusY: bannerFocusY,
             tags: tags,
             distanceInMiles: 0,
-            isApproved: true,
-            moderationStatus: .approved,
+            isApproved: false,
+            moderationStatus: .pending,
             moderationComment: nil,
             reviewedByUserID: nil,
             likedUserIDs: [],
@@ -768,7 +768,7 @@ extension AppSession {
             text: text.trimmingCharacters(in: .whitespacesAndNewlines),
             imageData: imageData,
             imageURL: nil,
-            moderationStatus: .approved,
+            moderationStatus: .pending,
             moderationComment: nil,
             reviewedByUserID: nil,
             likedUserIDs: [],
@@ -807,6 +807,12 @@ extension AppSession {
         updatedContributions[index].moderationComment = comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : comment
         updatedContributions[index].reviewedByUserID = currentUser?.id
         eventContributions = updatedContributions
+
+        if let eventService {
+            Task {
+                try? await eventService.createContribution(updatedContributions[index])
+            }
+        }
     }
 
     func toggleLike(for contribution: EventContribution) {

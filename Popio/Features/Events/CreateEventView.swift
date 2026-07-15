@@ -69,7 +69,7 @@ struct CreateEventView: View {
                     dismiss()
                 }
             } message: {
-                Text("Your pop-up is live and will appear in the feed and on the map.")
+                Text("Your pop-up was submitted for review and will appear after approval.")
             }
             .alert("Is this the same event?", isPresented: $isShowingDuplicateEventAlert) {
                 Button("Yes, cancel") {

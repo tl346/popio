@@ -2,47 +2,123 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    function userSafeFieldsOnlyChanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        "id",
+        "isAdmin",
+        "createdDate"
+      ]);
+    }
+
+    function eventEngagementFieldsOnlyChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        "likedUserIDs",
+        "likedAtByUserID",
+        "goingUserIDs"
+      ]);
+    }
+
+    function contributionEngagementFieldsOnlyChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        "likedUserIDs",
+        "likedAtByUserID"
+      ]);
+    }
+
     match /users/{userId} {
       allow read: if true;
 
-      allow create: if request.auth != null
-        && request.auth.uid == userId
-        && request.resource.data.id == userId;
+      allow create: if isOwner(userId)
+        && request.resource.data.id == userId
+        && request.resource.data.isAdmin == false;
 
-      allow update: if request.auth != null
-        && request.auth.uid == userId;
+      allow update: if isOwner(userId)
+        && userSafeFieldsOnlyChanged();
 
-      allow delete: if false;
+      allow delete: if isOwner(userId) || isAdmin();
     }
 
     match /events/{eventId} {
-      allow read: if true;
+      allow read: if resource.data.moderationStatus == "approved"
+        || (signedIn() && resource.data.createdByUserID == request.auth.uid)
+        || isAdmin();
 
-      allow create: if request.auth != null
+      allow create: if signedIn()
         && request.resource.data.id == eventId
-        && request.resource.data.createdByUserID == request.auth.uid;
+        && request.resource.data.createdByUserID == request.auth.uid
+        && request.resource.data.isApproved == false
+        && request.resource.data.moderationStatus == "pending"
+        && !request.resource.data.keys().hasAny([
+          "reviewedByUserID",
+          "moderationComment"
+        ]);
 
-      allow update: if request.auth != null
-        && resource.data.createdByUserID == request.auth.uid;
+      allow update: if isAdmin()
+        || (signedIn()
+          && resource.data.moderationStatus == "approved"
+          && eventEngagementFieldsOnlyChanged());
 
-      allow delete: if false;
+      allow delete: if isAdmin()
+        || (signedIn() && resource.data.createdByUserID == request.auth.uid);
+    }
+
+    match /eventContributions/{contributionId} {
+      allow read: if resource.data.moderationStatus == "approved"
+        || (signedIn() && resource.data.createdByUserID == request.auth.uid)
+        || isAdmin();
+
+      allow create: if signedIn()
+        && request.resource.data.id == contributionId
+        && request.resource.data.createdByUserID == request.auth.uid
+        && request.resource.data.moderationStatus == "pending"
+        && !request.resource.data.keys().hasAny([
+          "reviewedByUserID",
+          "moderationComment"
+        ]);
+
+      allow update: if isAdmin()
+        || (signedIn()
+          && resource.data.moderationStatus == "approved"
+          && contributionEngagementFieldsOnlyChanged());
+
+      allow delete: if isAdmin()
+        || (signedIn() && resource.data.createdByUserID == request.auth.uid);
     }
 
     match /friendRequests/{requestId} {
-      allow read: if request.auth != null
+      allow read: if signedIn()
         && (resource.data.fromUserID == request.auth.uid
-          || resource.data.toUserID == request.auth.uid);
+          || resource.data.toUserID == request.auth.uid
+          || isAdmin());
 
-      allow create: if request.auth != null
+      allow create: if signedIn()
         && request.resource.data.id == requestId
         && request.resource.data.fromUserID == request.auth.uid
         && request.resource.data.status == "pending";
 
-      allow update: if request.auth != null
+      allow update: if signedIn()
         && (resource.data.fromUserID == request.auth.uid
-          || resource.data.toUserID == request.auth.uid);
+          || resource.data.toUserID == request.auth.uid
+          || isAdmin());
 
-      allow delete: if false;
+      allow delete: if signedIn()
+        && (resource.data.fromUserID == request.auth.uid
+          || resource.data.toUserID == request.auth.uid
+          || isAdmin());
     }
   }
 }
