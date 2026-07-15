@@ -221,8 +221,8 @@ extension AppSession {
     }
 
     func deleteAccount() async throws {
-        guard let currentUser else { return }
-        let userID = currentUser.id
+        guard let deletingUser = currentUser else { return }
+        let userID = deletingUser.id
 
         if FirebaseBootstrap.isConfigured {
             try? await FirebaseImageStorageService().deleteProfileImage(userID: userID)

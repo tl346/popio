@@ -94,7 +94,7 @@ struct EventFeedView: View {
 
 }
 
-private enum EventFeedRoute: Hashable {
+enum EventFeedRoute: Hashable {
     case detail(PopioEvent)
     case chat(PopioEvent)
 }
@@ -1268,6 +1268,7 @@ struct EventCardView: View {
     let event: PopioEvent
     let distance: Double
     @ObservedObject var session: AppSession
+    var showsHeartButton = true
     @State private var heartPulse = false
 
     var body: some View {
@@ -1306,27 +1307,29 @@ struct EventCardView: View {
         .background(Color.white)
         .clipShape(Rectangle())
         .overlay(alignment: .bottomTrailing) {
-            Button {
-                withAnimation(.spring(response: 0.22, dampingFraction: 0.42)) {
-                    heartPulse = true
-                }
-                session.toggleLike(for: event)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                    withAnimation(.spring(response: 0.22, dampingFraction: 0.72)) {
-                        heartPulse = false
+            if showsHeartButton {
+                Button {
+                    withAnimation(.spring(response: 0.22, dampingFraction: 0.42)) {
+                        heartPulse = true
                     }
+                    session.toggleLike(for: event)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                        withAnimation(.spring(response: 0.22, dampingFraction: 0.72)) {
+                            heartPulse = false
+                        }
+                    }
+                } label: {
+                    Image(systemName: session.isLikedByCurrentUser(event) ? "heart.fill" : "heart")
+                        .font(PopioFont.custom(size: 16, weight: .semibold))
+                        .foregroundStyle(session.isLikedByCurrentUser(event) ? PopioTheme.coral : PopioTheme.ink.opacity(0.72))
+                        .frame(width: 34, height: 34)
+                        .contentShape(Circle())
+                        .scaleEffect(heartPulse ? 1.18 : 1)
                 }
-            } label: {
-                Image(systemName: session.isLikedByCurrentUser(event) ? "heart.fill" : "heart")
-                    .font(PopioFont.custom(size: 16, weight: .semibold))
-                    .foregroundStyle(session.isLikedByCurrentUser(event) ? PopioTheme.coral : PopioTheme.ink.opacity(0.72))
-                    .frame(width: 34, height: 34)
-                    .contentShape(Circle())
-                    .scaleEffect(heartPulse ? 1.18 : 1)
+                .buttonStyle(.plain)
+                .padding(.trailing, 8)
+                .padding(.bottom, 10)
             }
-            .buttonStyle(.plain)
-            .padding(.trailing, 8)
-            .padding(.bottom, 10)
         }
         .overlay {
             Rectangle()

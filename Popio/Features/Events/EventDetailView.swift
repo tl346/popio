@@ -7,14 +7,17 @@ struct EventDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var session: AppSession
     let event: PopioEvent
+    let isAdminReview: Bool
     @State private var selectedPicture: PhotosPickerItem?
     @State private var pictureData: Data?
     @State private var submissionMessage: String?
     @State private var isShowingMenu = false
     @State private var heartPulse = false
+    @State private var expandedPhoto: EventContribution?
 
-    init(event: PopioEvent, opensChat: Bool = false) {
+    init(event: PopioEvent, opensChat: Bool = false, isAdminReview: Bool = false) {
         self.event = event
+        self.isAdminReview = isAdminReview
     }
 
     var body: some View {
@@ -35,7 +38,11 @@ struct EventDetailView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            bottomActionBar
+            if isAdminReview {
+                adminReviewActionBar
+            } else {
+                bottomActionBar
+            }
         }
         .onChange(of: selectedPicture) { _, newValue in
             guard let newValue else { return }
@@ -48,6 +55,13 @@ struct EventDetailView: View {
                 pictureData = nil
                 selectedPicture = nil
             }
+        }
+        .fullScreenCover(item: $expandedPhoto) { contribution in
+            EventExpandedPhotoView(
+                contribution: contribution,
+                category: currentEvent.category
+            )
+            .environmentObject(session)
         }
     }
 
@@ -387,6 +401,46 @@ struct EventDetailView: View {
         .background(Color.white)
     }
 
+    private var adminReviewActionBar: some View {
+        VStack(spacing: 10) {
+            Button {
+                session.reviewEvent(currentEvent, status: .approved, comment: "")
+                dismiss()
+            } label: {
+                Label("Approve", systemImage: "checkmark.circle.fill")
+                    .font(PopioFont.custom(size: 15, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 46)
+            }
+            .foregroundStyle(.white)
+            .background(eventActionGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .buttonStyle(.plain)
+            .accessibilityLabel("Approve pop-up")
+
+            Button {
+                session.reviewEvent(currentEvent, status: .rejected, comment: "")
+                dismiss()
+            } label: {
+                Label("Reject", systemImage: "xmark.circle.fill")
+                    .font(PopioFont.custom(size: 15, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 46)
+            }
+            .foregroundStyle(PopioTheme.coral)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(PopioTheme.coral.opacity(0.62), lineWidth: 1)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Reject pop-up")
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 48)
+        .background(Color.white)
+    }
+
     private var goingUsers: [PopioUser] {
         currentEvent.goingUserIDs.compactMap { userID in
             session.users.first { $0.id == userID }
@@ -433,7 +487,13 @@ struct EventDetailView: View {
                 .accessibilityLabel("Add photo")
 
                 ForEach(contributions) { contribution in
-                    EventPhotoGridTile(contribution: contribution, category: currentEvent.category)
+                    Button {
+                        expandedPhoto = contribution
+                    } label: {
+                        EventPhotoGridTile(contribution: contribution, category: currentEvent.category)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("View photo by \(contribution.creatorUsername)")
                 }
             }
         }
@@ -812,6 +872,90 @@ private struct EventPhotoGridTile: View {
         .aspectRatio(1, contentMode: .fill)
         .clipped()
         .clipShape(Rectangle())
+    }
+}
+
+private struct EventExpandedPhotoView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var session: AppSession
+    let contribution: EventContribution
+    let category: EventCategory
+
+    private var currentContribution: EventContribution {
+        session.eventContributions.first { $0.id == contribution.id } ?? contribution
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            BannerImageView(
+                imageData: currentContribution.imageData,
+                imageURL: currentContribution.imageURL,
+                category: category,
+                focusY: 0.5
+            )
+            .aspectRatio(contentMode: .fit)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+
+            VStack {
+                HStack(alignment: .top) {
+                    Text("PC: @\(currentContribution.creatorUsername)")
+                        .font(PopioFont.custom(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .frame(height: 40)
+                        .background(Color.black.opacity(0.42), in: Capsule())
+
+                    Spacer()
+
+                    photoLikeButton
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+
+                Spacer()
+            }
+
+            VStack {
+                Spacer()
+
+                Button {
+                    dismiss()
+                } label: {
+                    Text("Close")
+                        .font(PopioFont.custom(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 18)
+                        .frame(height: 42)
+                        .background(Color.black.opacity(0.48), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 28)
+            }
+        }
+    }
+
+    private var photoLikeButton: some View {
+        Button {
+            session.toggleLike(for: currentContribution)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: session.isLikedByCurrentUser(currentContribution) ? "heart.fill" : "heart")
+                    .font(PopioFont.custom(size: 16, weight: .semibold))
+
+                Text("\(currentContribution.likeCount)")
+                    .font(PopioFont.custom(size: 13, weight: .semibold))
+                    .monospacedDigit()
+            }
+            .foregroundStyle(session.isLikedByCurrentUser(currentContribution) ? PopioTheme.coral : .white)
+            .padding(.horizontal, 12)
+            .frame(height: 40)
+            .background(Color.black.opacity(0.42), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(session.isLikedByCurrentUser(currentContribution) ? "Unlike photo" : "Like photo")
     }
 }
 

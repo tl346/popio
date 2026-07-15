@@ -45,7 +45,11 @@ struct MainTabView: View {
                     currentUser: session.currentUser,
                     isAdmin: session.currentUser?.isAdmin == true,
                     addAction: {
-                        isShowingCreateEvent = true
+                        if session.currentUser?.isAdmin == true {
+                            selectedTab = .popUpRequests
+                        } else {
+                            isShowingCreateEvent = true
+                        }
                     }
                 )
                 .ignoresSafeArea(.keyboard, edges: .bottom)
@@ -67,7 +71,11 @@ struct MainTabView: View {
         case .mvps:
             LeaderboardView()
         case .popUpRequests:
-            PopUpRequestsView()
+            if session.currentUser?.isAdmin == true {
+                PopUpRequestsView()
+            } else {
+                EventFeedView(viewModel: eventFeedViewModel)
+            }
         case .profile:
             ProfileView()
         }
@@ -463,7 +471,7 @@ private enum MainTab: CaseIterable, Hashable {
         case .mvps:
             return "Leaderboard"
         case .popUpRequests:
-            return "Requests"
+            return "Review"
         case .profile:
             return "Profile"
         }
@@ -478,7 +486,7 @@ private enum MainTab: CaseIterable, Hashable {
         case .mvps:
             return "trophy"
         case .popUpRequests:
-            return "tray.full"
+            return "checklist"
         case .profile:
             return "person.crop.circle"
         }
@@ -495,11 +503,8 @@ private struct CompactTabBar: View {
         HStack(spacing: 0) {
             tabButton(.popUps)
             tabButton(.map)
-            addButton
+            centerButton
             tabButton(.mvps)
-            if isAdmin {
-                tabButton(.popUpRequests)
-            }
             tabButton(.profile)
         }
         .padding(.horizontal, 9)
@@ -550,18 +555,22 @@ private struct CompactTabBar: View {
         }
     }
 
-    private var addButton: some View {
+    private var centerButton: some View {
         Button {
-            addAction()
+            if isAdmin {
+                selectedTab = .popUpRequests
+            } else {
+                addAction()
+            }
         } label: {
-            Image(systemName: "plus.app.fill")
-                .font(PopioFont.custom(size: 25, weight: .medium))
+            Image(systemName: isAdmin ? MainTab.popUpRequests.systemImage : "plus.app.fill")
+                .font(PopioFont.custom(size: isAdmin ? 19 : 25, weight: .medium))
             .frame(maxWidth: .infinity)
             .frame(height: 38)
-            .foregroundStyle(PopioTheme.gold)
+            .foregroundStyle(isAdmin && selectedTab != .popUpRequests ? PopioTheme.muted : PopioTheme.gold)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Add pop-up")
+        .accessibilityLabel(isAdmin ? "Review pending pop-ups" : "Add pop-up")
     }
 
 }
@@ -616,168 +625,52 @@ private struct TeardropPinShape: Shape {
 
 private struct PopUpRequestsView: View {
     @EnvironmentObject private var session: AppSession
-    @State private var reviewComments: [String: String] = [:]
 
     var body: some View {
         NavigationStack {
-            List {
-                if session.pendingEventRequests.isEmpty && session.pendingContributionRequests.isEmpty {
-                    EmptyStateView(
-                        systemImage: "checkmark.seal",
-                        title: "No pending requests",
-                        message: "Submitted pop-ups and content waiting for review will appear here."
-                    )
-                    .listRowBackground(Color.clear)
-                } else {
-                    if !session.pendingEventRequests.isEmpty {
-                        Section("Pop-Ups") {
-                            ForEach(session.pendingEventRequests) { event in
-                                eventRequestRow(for: event)
-                            }
-                        }
-                    }
+            ScrollView {
+                let columns = [
+                    GridItem(.flexible(), spacing: 12),
+                    GridItem(.flexible(), spacing: 12)
+                ]
 
-                    if !session.pendingContributionRequests.isEmpty {
-                        Section("Pictures and Reviews") {
-                            ForEach(session.pendingContributionRequests) { contribution in
-                                contributionRequestRow(for: contribution)
+                VStack(alignment: .leading, spacing: 18) {
+                    if session.pendingEventRequests.isEmpty {
+                        EmptyStateView(
+                            systemImage: "checkmark.seal",
+                            title: "No pending pop-ups",
+                            message: "Submitted pop-ups waiting for review will appear here."
+                        )
+                        .padding(.top, 36)
+                        .padding(.bottom, 128)
+                    } else {
+                        LazyVGrid(columns: columns, spacing: 16) {
+                            ForEach(session.pendingEventRequests) { event in
+                                EventCardView(
+                                    event: event,
+                                    distance: event.distanceInMiles,
+                                    session: session,
+                                    showsHeartButton: false
+                                )
                             }
                         }
                     }
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 20)
+                .padding(.bottom, 132)
             }
-            .scrollContentBackground(.hidden)
+            .scrollIndicators(.hidden)
             .background(PopioTheme.background)
             .navigationTitle("")
-        }
-    }
-
-    private func eventRequestRow(for event: PopioEvent) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            EventBannerImageView(event: event)
-                .frame(height: 150)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(event.title)
-                        .font(PopioFont.headline())
-                    Spacer()
-                    CategoryBadge(category: event.category)
+            .navigationDestination(for: EventFeedRoute.self) { route in
+                switch route {
+                case .detail(let event):
+                    EventDetailView(event: event, isAdminReview: true)
+                case .chat(let event):
+                    EventChatView(event: event)
                 }
-
-                Text("@\(event.creatorUsername)")
-                    .font(PopioFont.subheadline(.semibold))
-                    .foregroundStyle(PopioTheme.muted)
-
-                if event.hasMenuImage {
-                    Label("Menu photo attached", systemImage: "menucard.fill")
-                        .font(PopioFont.caption(.semibold))
-                        .foregroundStyle(PopioTheme.accent)
-                }
-
-                Label(event.address, systemImage: "mappin.and.ellipse")
-                    .font(PopioFont.caption(.semibold))
-                    .foregroundStyle(PopioTheme.muted)
-            }
-
-            TextField("Review comment", text: Binding(
-                get: { reviewComments[event.id, default: ""] },
-                set: { reviewComments[event.id] = $0 }
-            ), axis: .vertical)
-            .lineLimit(2...4)
-            .popioField()
-
-            HStack(spacing: 10) {
-                Button {
-                    session.reviewEvent(event, status: .rejected, comment: reviewComments[event.id, default: ""])
-                } label: {
-                    Label("Reject", systemImage: "xmark.circle.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .popioSecondaryButton(tint: PopioTheme.gold)
-
-                Button {
-                    session.reviewEvent(event, status: .approved, comment: reviewComments[event.id, default: ""])
-                } label: {
-                    Label("Accept", systemImage: "checkmark.circle.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .popioPrimaryButton()
             }
         }
-        .padding(.vertical, 8)
-        .listRowBackground(PopioTheme.backgroundElevated)
-    }
-
-    private func contributionRequestRow(for contribution: EventContribution) -> some View {
-        let event = session.events.first { $0.id == contribution.eventID }
-
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(contribution.type.rawValue)
-                    .font(PopioFont.headline())
-                Spacer()
-                Text(event?.title ?? "Unknown event")
-                    .font(PopioFont.caption(.semibold))
-                    .foregroundStyle(PopioTheme.muted)
-            }
-
-            Text("@\(contribution.creatorUsername)")
-                .font(PopioFont.subheadline(.semibold))
-                .foregroundStyle(PopioTheme.muted)
-
-            if contribution.type == .picture {
-                BannerImageView(
-                    imageData: contribution.imageData,
-                    imageURL: contribution.imageURL,
-                    category: event?.category ?? .food,
-                    focusY: 0.5
-                )
-                .frame(height: 150)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-
-            if !contribution.text.isEmpty {
-                Text(contribution.text)
-                    .font(PopioFont.subheadline())
-                    .foregroundStyle(PopioTheme.ink)
-            }
-
-            TextField("Review comment", text: Binding(
-                get: { reviewComments[contribution.id, default: ""] },
-                set: { reviewComments[contribution.id] = $0 }
-            ), axis: .vertical)
-            .lineLimit(2...4)
-            .popioField()
-
-            HStack(spacing: 10) {
-                Button {
-                    session.reviewContribution(
-                        contribution,
-                        status: .rejected,
-                        comment: reviewComments[contribution.id, default: ""]
-                    )
-                } label: {
-                    Label("Reject", systemImage: "xmark.circle.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .popioSecondaryButton(tint: PopioTheme.gold)
-
-                Button {
-                    session.reviewContribution(
-                        contribution,
-                        status: .approved,
-                        comment: reviewComments[contribution.id, default: ""]
-                    )
-                } label: {
-                    Label("Accept", systemImage: "checkmark.circle.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .popioPrimaryButton()
-            }
-        }
-        .padding(.vertical, 8)
-        .listRowBackground(PopioTheme.backgroundElevated)
     }
 }
