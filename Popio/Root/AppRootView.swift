@@ -92,13 +92,16 @@ private struct LeaderboardView: View {
                     VStack(spacing: 18) {
                     LeaderboardScopePicker(selectedScope: $selectedScope)
 
-                    if !session.mvpLeaderboard.isEmpty {
-                        LeaderboardPodium(standings: Array(session.mvpLeaderboard.prefix(3)))
+                    VStack(spacing: 18) {
+                        if !leaderboardStandings.isEmpty {
+                            LeaderboardPodium(standings: Array(leaderboardStandings.prefix(3)))
+                        }
+
+                        LeaderboardTable(standings: Array(leaderboardStandings.dropFirst(3)))
+
+                        LeaderboardCallout()
                     }
-
-                    LeaderboardTable(standings: Array(session.mvpLeaderboard.dropFirst(3)))
-
-                    LeaderboardCallout()
+                    .padding(.top, 6)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
@@ -123,6 +126,15 @@ private struct LeaderboardView: View {
         }
         .frame(minHeight: 44)
     }
+
+    private var leaderboardStandings: [AppSession.MVPStanding] {
+        switch selectedScope {
+        case .thisWeek:
+            return session.weeklyMVPLeaderboard
+        case .allTime:
+            return session.mvpLeaderboard
+        }
+    }
 }
 
 private enum LeaderboardScope: String, CaseIterable {
@@ -136,6 +148,7 @@ private enum LeaderboardPalette {
     static let muted = PopioTheme.muted
     static let orange = PopioTheme.gold
     static let gold = PopioTheme.gold
+    static let firstRank = Color(red: 1.0, green: 0.89, blue: 0.45)
     static let silver = PopioTheme.accent
     static let bronze = PopioTheme.coral.opacity(0.86)
     static let cardSoft = PopioTheme.surface
@@ -226,7 +239,7 @@ private enum PodiumStyle {
     var rankColor: Color {
         switch self {
         case .first:
-            return LeaderboardPalette.gold
+            return LeaderboardPalette.firstRank
         case .second:
             return LeaderboardPalette.silver
         case .third:
@@ -258,7 +271,7 @@ private struct PodiumCard: View {
             if style == .first {
                 Image(systemName: "crown.fill")
                     .font(PopioFont.custom(size: 20, weight: .bold))
-                    .foregroundStyle(LeaderboardPalette.gold)
+                    .foregroundStyle(LeaderboardPalette.firstRank)
                     .offset(y: 5)
                     .padding(.top, -3)
                     .padding(.bottom, -5)
@@ -526,6 +539,10 @@ private struct CompactTabBar: View {
                     Circle()
                         .stroke(selectedTab == .profile ? PopioTheme.gold : Color.white.opacity(0.95), lineWidth: 2)
                 }
+        } else if tab == .map {
+            TeardropPinTabIcon()
+                .frame(width: 22, height: 24)
+                .frame(width: 38, height: 38)
         } else {
             Image(systemName: tab.systemImage)
                 .font(PopioFont.custom(size: 18, weight: .semibold))
@@ -547,6 +564,54 @@ private struct CompactTabBar: View {
         .accessibilityLabel("Add pop-up")
     }
 
+}
+
+private struct TeardropPinTabIcon: View {
+    var body: some View {
+        ZStack {
+            TeardropPinShape()
+                .stroke(lineWidth: 2.1)
+
+            Circle()
+                .stroke(lineWidth: 1.9)
+                .frame(width: 6.5, height: 6.5)
+                .offset(y: -3.5)
+        }
+    }
+}
+
+private struct TeardropPinShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let midX = rect.midX
+        let topY = rect.minY + rect.height * 0.05
+        let widestY = rect.minY + rect.height * 0.37
+        let pointY = rect.maxY - rect.height * 0.04
+
+        path.move(to: CGPoint(x: midX, y: pointY))
+        path.addCurve(
+            to: CGPoint(x: rect.minX + rect.width * 0.10, y: widestY),
+            control1: CGPoint(x: rect.minX + rect.width * 0.33, y: rect.minY + rect.height * 0.78),
+            control2: CGPoint(x: rect.minX + rect.width * 0.10, y: rect.minY + rect.height * 0.60)
+        )
+        path.addCurve(
+            to: CGPoint(x: midX, y: topY),
+            control1: CGPoint(x: rect.minX + rect.width * 0.10, y: rect.minY + rect.height * 0.18),
+            control2: CGPoint(x: rect.minX + rect.width * 0.30, y: topY)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.maxX - rect.width * 0.10, y: widestY),
+            control1: CGPoint(x: rect.maxX - rect.width * 0.30, y: topY),
+            control2: CGPoint(x: rect.maxX - rect.width * 0.10, y: rect.minY + rect.height * 0.18)
+        )
+        path.addCurve(
+            to: CGPoint(x: midX, y: pointY),
+            control1: CGPoint(x: rect.maxX - rect.width * 0.10, y: rect.minY + rect.height * 0.60),
+            control2: CGPoint(x: rect.maxX - rect.width * 0.33, y: rect.minY + rect.height * 0.78)
+        )
+        path.closeSubpath()
+        return path
+    }
 }
 
 private struct PopUpRequestsView: View {

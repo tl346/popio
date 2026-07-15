@@ -9,6 +9,7 @@ protocol AuthenticationServicing {
     func signInWithGoogle(presenting viewController: UIViewController) async throws -> PopioUser
     func signInWithApple(idToken: String, nonce: String, fullName: PersonNameComponents?, email: String?) async throws -> PopioUser
     func logout() async throws
+    func deleteAccount(userID: String) async throws
     func updateProfile(userID: String, username: String, email: String, firstName: String, lastName: String, bio: String, instagramHandle: String) async throws -> PopioUser
     func updateProfileImageURL(userID: String, profilePictureURL: URL) async throws -> PopioUser
 }
@@ -35,4 +36,7 @@ protocol ImageStorageServicing {
     func uploadEventImage(data: Data, eventID: String) async throws -> URL
     func uploadMenuImage(data: Data, eventID: String) async throws -> URL
     func uploadContributionImage(data: Data, contributionID: String) async throws -> URL
+    func deleteProfileImage(userID: String) async throws
+    func deleteEventImages(eventID: String) async throws
+    func deleteContributionImage(contributionID: String) async throws
 }

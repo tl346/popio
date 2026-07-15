@@ -24,6 +24,19 @@ struct FirebaseImageStorageService: ImageStorageServicing {
         try await upload(data: data, path: "eventContributionImages/\(contributionID).jpg")
     }
 
+    func deleteProfileImage(userID: String) async throws {
+        try await storage.reference().child("profileImages/\(userID).jpg").delete()
+    }
+
+    func deleteEventImages(eventID: String) async throws {
+        try? await storage.reference().child("eventImages/\(eventID).jpg").delete()
+        try? await storage.reference().child("menuImages/\(eventID).jpg").delete()
+    }
+
+    func deleteContributionImage(contributionID: String) async throws {
+        try await storage.reference().child("eventContributionImages/\(contributionID).jpg").delete()
+    }
+
     private func upload(data: Data, path: String) async throws -> URL {
         let reference = storage.reference().child(path)
         let metadata = StorageMetadata()

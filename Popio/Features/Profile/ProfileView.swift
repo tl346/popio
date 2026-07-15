@@ -8,6 +8,8 @@ struct ProfileView: View {
     @State private var isShowingEditProfile = false
     @State private var editProfileInitialFocus: EditProfileFocusedField?
     @State private var isShowingProfileMenu = false
+    @State private var isConfirmingSignOut = false
+    @State private var activeSupportSheet: ProfileSupportRequestType?
     @State private var selectedActivityTab: ProfileActivityTab = .going
 
     var body: some View {
@@ -50,15 +52,45 @@ struct ProfileView: View {
                             isShowingEditProfile = true
                         }
                     },
+                    submitFeedback: {
+                        isShowingProfileMenu = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                            activeSupportSheet = .feedback
+                        }
+                    },
+                    reportBug: {
+                        isShowingProfileMenu = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                            activeSupportSheet = .bug
+                        }
+                    },
                     signOut: {
                         isShowingProfileMenu = false
-                        Task {
-                            try? await session.logout()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                            isConfirmingSignOut = true
                         }
                     }
                 )
-                .presentationDetents([.height(170)])
+                .presentationDetents([.height(300)])
                 .presentationDragIndicator(.hidden)
+            }
+            .confirmationDialog(
+                "Are you sure you want to sign out?",
+                isPresented: $isConfirmingSignOut,
+                titleVisibility: .visible
+            ) {
+                Button("Sign Out", role: .destructive) {
+                    Task {
+                        try? await session.logout()
+                    }
+                }
+
+                Button("Cancel", role: .cancel) {}
+            }
+            .sheet(item: $activeSupportSheet) { sheet in
+                FeedbackFormSheet(type: sheet)
+                    .presentationDetents([.height(330)])
+                    .presentationDragIndicator(.hidden)
             }
             .navigationDestination(for: PopioEvent.self) { event in
                 EventDetailView(event: event)
@@ -479,6 +511,8 @@ private struct ProfileStatDivider: View {
 
 private struct ProfileOptionsSheet: View {
     let editProfile: () -> Void
+    let submitFeedback: () -> Void
+    let reportBug: () -> Void
     let signOut: () -> Void
 
     var body: some View {
@@ -496,9 +530,24 @@ private struct ProfileOptionsSheet: View {
             )
 
             ProfileMenuButton(
+                title: "Submit Feedback",
+                systemImage: "text.bubble",
+                tint: PopioTheme.gold,
+                action: submitFeedback
+            )
+
+            ProfileMenuButton(
+                title: "Report Bug",
+                systemImage: "ladybug",
+                tint: PopioTheme.coral,
+                action: reportBug
+            )
+
+            ProfileMenuButton(
                 title: "Sign Out",
                 systemImage: "rectangle.portrait.and.arrow.right",
                 tint: PopioTheme.coral,
+                style: .outline,
                 action: signOut
             )
         }
@@ -513,7 +562,13 @@ private struct ProfileMenuButton: View {
     let title: String
     let systemImage: String
     let tint: Color
+    var style: Style = .filled
     let action: () -> Void
+
+    enum Style {
+        case filled
+        case outline
+    }
 
     var body: some View {
         Button(action: action) {
@@ -522,13 +577,169 @@ private struct ProfileMenuButton: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
         }
-        .foregroundStyle(.white)
-        .background(tint, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .foregroundStyle(style == .filled ? .white : tint)
+        .background(style == .filled ? tint : Color.clear, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.white.opacity(0.36), lineWidth: 1)
+                .stroke(style == .filled ? Color.white.opacity(0.36) : tint, lineWidth: 1.3)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private enum ProfileSupportRequestType: String, Identifiable {
+    case feedback
+    case bug
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .feedback:
+            return "Submit Feedback"
+        case .bug:
+            return "Report Bug"
+        }
+    }
+
+    var prompt: String {
+        switch self {
+        case .feedback:
+            return "Tell us what would make Popio better."
+        case .bug:
+            return "Describe what happened and how to reproduce it."
+        }
+    }
+
+    var placeholder: String {
+        switch self {
+        case .feedback:
+            return "Share your feedback..."
+        case .bug:
+            return "Describe the bug..."
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .feedback:
+            return "text.bubble.fill"
+        case .bug:
+            return "ladybug.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .feedback:
+            return PopioTheme.gold
+        case .bug:
+            return PopioTheme.coral
+        }
+    }
+}
+
+private struct FeedbackFormSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let type: ProfileSupportRequestType
+    @State private var message = ""
+    @State private var didSubmit = false
+
+    private let characterLimit = 500
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Capsule()
+                .fill(Color.black.opacity(0.14))
+                .frame(width: 42, height: 5)
+                .padding(.top, 10)
+
+            HStack(spacing: 10) {
+                Image(systemName: type.systemImage)
+                    .font(PopioFont.custom(size: 18, weight: .semibold))
+                    .foregroundStyle(type.tint)
+                    .frame(width: 34, height: 34)
+                    .background(type.tint.opacity(0.14), in: Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(type.title)
+                        .font(PopioFont.custom(size: 17, weight: .semibold))
+                        .foregroundStyle(ProfilePalette.ink)
+
+                    Text(type.prompt)
+                        .font(PopioFont.custom(size: 12.5, weight: .medium))
+                        .foregroundStyle(ProfilePalette.body)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            ZStack(alignment: .topLeading) {
+                TextField(type.placeholder, text: $message, axis: .vertical)
+                    .lineLimit(5...7)
+                    .font(PopioFont.custom(size: 14, weight: .medium))
+                    .foregroundStyle(ProfilePalette.ink)
+                    .padding(14)
+                    .frame(maxWidth: .infinity, minHeight: 128, alignment: .topLeading)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(type.tint.opacity(0.30), lineWidth: 1)
+                    }
+            }
+
+            HStack {
+                Text("\(message.count)/\(characterLimit)")
+                    .font(PopioFont.custom(size: 11, weight: .medium))
+                    .foregroundStyle(ProfilePalette.body)
+                    .monospacedDigit()
+
+                Spacer()
+
+                if didSubmit {
+                    Text("Thanks, submitted.")
+                        .font(PopioFont.custom(size: 12, weight: .semibold))
+                        .foregroundStyle(PopioTheme.accent)
+                }
+            }
+
+            Button {
+                didSubmit = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    dismiss()
+                }
+            } label: {
+                Label("Submit", systemImage: "paperplane.fill")
+                    .font(PopioFont.custom(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(type.tint, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || didSubmit)
+            .opacity(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || didSubmit ? 0.55 : 1)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color.white,
+                    type.tint.opacity(0.08),
+                    Color.white
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+        )
+        .onChange(of: message) { _, newValue in
+            guard newValue.count > characterLimit else { return }
+            message = String(newValue.prefix(characterLimit))
+        }
     }
 }
 
@@ -690,6 +901,8 @@ private struct EditProfileView: View {
     let initialFocus: EditProfileFocusedField?
     @State private var selectedProfilePhoto: PhotosPickerItem?
     @State private var isUploadingProfilePhoto = false
+    @State private var isConfirmingAccountDeletion = false
+    @State private var isDeletingAccount = false
     @State private var profilePhotoError: String?
     @FocusState private var focusedField: EditProfileFocusedField?
 
@@ -776,6 +989,8 @@ private struct EditProfileView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(PopioTheme.coral.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
+
+                    deleteAccountSection
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 18)
@@ -803,6 +1018,21 @@ private struct EditProfileView: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
         .presentationCornerRadius(30)
+        .confirmationDialog(
+            "Are you sure you want to delete your account?",
+            isPresented: $isConfirmingAccountDeletion,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Account", role: .destructive) {
+                Task {
+                    await deleteAccount()
+                }
+            }
+
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove your account, profile, created pop-ups, photos, chat messages, followers, and activity from Popio.")
+        }
     }
 
     private var editHeader: some View {
@@ -880,6 +1110,50 @@ private struct EditProfileView: View {
         .accessibilityLabel("Change profile photo")
     }
 
+    private var deleteAccountSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Account")
+                .font(PopioFont.custom(size: 14, weight: .semibold))
+                .foregroundStyle(ProfilePalette.ink)
+
+            Text("Deleting your account permanently removes your Popio profile and account activity.")
+                .font(PopioFont.custom(size: 12, weight: .medium))
+                .foregroundStyle(ProfilePalette.body)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                isConfirmingAccountDeletion = true
+            } label: {
+                HStack(spacing: 8) {
+                    if isDeletingAccount {
+                        ProgressView()
+                            .tint(PopioTheme.coral)
+                    }
+
+                    Text(isDeletingAccount ? "Deleting Account" : "Delete Account")
+                        .font(PopioFont.custom(size: 15, weight: .semibold))
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+            }
+            .foregroundStyle(PopioTheme.coral)
+            .background(Color.clear, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(PopioTheme.coral, lineWidth: 1.3)
+            }
+            .buttonStyle(.plain)
+            .disabled(isDeletingAccount)
+            .opacity(isDeletingAccount ? 0.7 : 1)
+        }
+        .padding(16)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(ProfilePalette.line, lineWidth: 1)
+        }
+    }
+
     private func updateProfilePhoto(from item: PhotosPickerItem) async {
         profilePhotoError = nil
         isUploadingProfilePhoto = true
@@ -921,6 +1195,19 @@ private struct EditProfileView: View {
                 instagramHandle: viewModel.instagramHandle
             )
             viewModel.load(from: session.currentUser)
+            isPresented = false
+        } catch {
+            viewModel.errorMessage = error.localizedDescription
+        }
+    }
+
+    private func deleteAccount() async {
+        viewModel.errorMessage = nil
+        isDeletingAccount = true
+        defer { isDeletingAccount = false }
+
+        do {
+            try await session.deleteAccount()
             isPresented = false
         } catch {
             viewModel.errorMessage = error.localizedDescription

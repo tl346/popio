@@ -23,24 +23,7 @@ struct EventDetailView: View {
                 topControls
                     .padding(.top, 8)
 
-                heroSection
-
-                summarySection
-                eventFactsSection
-                descriptionCallout
-                tagsSection
-
-                if currentEvent.hasMenuImage {
-                    menuButton
-                }
-
-                creatorSection
-
-                if !goingUsers.isEmpty {
-                    GoingUsersStack(users: goingUsers, totalCount: currentEvent.goingCount)
-                }
-
-                communitySection
+                alignedEventContent
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 176)
@@ -86,10 +69,32 @@ struct EventDetailView: View {
         }
         .aspectRatio(1, contentMode: .fit)
         .clipShape(Rectangle())
-        .padding(.horizontal, 12)
         .sheet(isPresented: $isShowingMenu) {
             EventMenuSheet(event: currentEvent)
         }
+    }
+
+    private var alignedEventContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            heroSection
+            summarySection
+            eventFactsSection
+            descriptionCallout
+            tagsSection
+
+            if currentEvent.hasMenuImage {
+                menuButton
+            }
+
+            creatorSection
+
+            if !goingUsers.isEmpty {
+                GoingUsersStack(users: goingUsers, totalCount: currentEvent.goingCount)
+            }
+
+            communitySection
+        }
+        .padding(.horizontal, 12)
     }
 
     private var topControls: some View {
@@ -1085,45 +1090,48 @@ private struct ChatMessageBubble: View {
     }
 
     private var messageBubble: some View {
-        Text(contribution.text.isEmpty ? "Message" : contribution.text)
-            .font(PopioFont.custom(size: 14, weight: .medium))
-            .foregroundStyle(isCurrentUser ? .white : PopioTheme.ink)
-            .lineSpacing(2)
+        VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: 5) {
+            Text(contribution.text.isEmpty ? "Message" : contribution.text)
+                .font(PopioFont.custom(size: 14, weight: .medium))
+                .foregroundStyle(isCurrentUser ? .white : PopioTheme.ink)
+                .lineSpacing(2)
+
+            if isCurrentUser {
+                HStack(spacing: 3) {
+                    Image(systemName: "heart.fill")
+                        .font(PopioFont.custom(size: 9.5, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.82))
+
+                    Text("\(likeCount)")
+                        .font(PopioFont.custom(size: 9.5, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.82))
+                        .monospacedDigit()
+                }
+                .accessibilityLabel("\(likeCount) likes")
+            } else {
+                Button(action: toggleLike) {
+                    HStack(spacing: 3) {
+                        Image(systemName: isLiked ? "heart.fill" : "heart")
+                            .font(PopioFont.custom(size: 9.5, weight: .semibold))
+                            .foregroundStyle(isLiked ? PopioTheme.coral : PopioTheme.muted)
+
+                        Text("\(likeCount)")
+                            .font(PopioFont.custom(size: 9.5, weight: .semibold))
+                            .foregroundStyle(PopioTheme.muted)
+                            .monospacedDigit()
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isLiked ? "Unlike message" : "Like message")
+            }
+        }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .padding(.trailing, isCurrentUser ? 14 : 48)
             .background(bubbleBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay {
                 if !isCurrentUser {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .stroke(PopioTheme.line, lineWidth: 1)
-                }
-            }
-            .overlay(alignment: .bottomTrailing) {
-                if !isCurrentUser {
-                    Button(action: toggleLike) {
-                        HStack(spacing: 4) {
-                            Image(systemName: isLiked ? "heart.fill" : "heart")
-                                .font(PopioFont.custom(size: 10.5, weight: .semibold))
-                                .foregroundStyle(isLiked ? PopioTheme.coral : PopioTheme.muted)
-
-                            Text("\(likeCount)")
-                                .font(PopioFont.custom(size: 10, weight: .semibold))
-                                .foregroundStyle(PopioTheme.muted)
-                                .monospacedDigit()
-                        }
-                        .padding(.horizontal, 7)
-                        .frame(height: 22)
-                        .background(Color.white.opacity(0.86), in: Capsule())
-                        .overlay {
-                            Capsule()
-                                .stroke(PopioTheme.line, lineWidth: 1)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(isLiked ? "Unlike message" : "Like message")
-                    .padding(.trailing, 6)
-                    .padding(.bottom, 5)
                 }
             }
     }

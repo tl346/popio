@@ -131,7 +131,7 @@ final class AuthenticationViewModel: ObservableObject {
 
     func signInWithGoogle(using session: AppSession, presenting viewController: UIViewController?) async {
         errorMessage = nil
-        guard let viewController else {
+        guard let viewController = viewController ?? UIViewController.popioTopPresenter() else {
             errorMessage = "Unable to present Google Sign-In."
             return
         }
@@ -242,5 +242,35 @@ final class AuthenticationViewModel: ObservableObject {
         }
 
         return result
+    }
+}
+
+private extension UIViewController {
+    static func popioTopPresenter() -> UIViewController? {
+        let activeScene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+
+        let rootViewController = activeScene?.windows
+            .first { $0.isKeyWindow }?
+            .rootViewController
+
+        return rootViewController?.popioTopMostPresented()
+    }
+
+    func popioTopMostPresented() -> UIViewController {
+        if let navigationController = self as? UINavigationController {
+            return navigationController.visibleViewController?.popioTopMostPresented() ?? navigationController
+        }
+
+        if let tabBarController = self as? UITabBarController {
+            return tabBarController.selectedViewController?.popioTopMostPresented() ?? tabBarController
+        }
+
+        if let presentedViewController {
+            return presentedViewController.popioTopMostPresented()
+        }
+
+        return self
     }
 }

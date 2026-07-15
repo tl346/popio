@@ -85,6 +85,7 @@ final class AppSession: ObservableObject {
                 moderationComment: nil,
                 reviewedByUserID: "user_001",
                 likedUserIDs: ["user_001"],
+                likedAtByUserID: ["user_001": .now],
                 createdDate: .now
             )
         ]
@@ -214,6 +215,41 @@ extension AppSession {
     func logout() async throws {
         if let authenticationService {
             try await authenticationService.logout()
+        }
+
+        currentUser = nil
+    }
+
+    func deleteAccount() async throws {
+        guard let currentUser else { return }
+        let userID = currentUser.id
+
+        if FirebaseBootstrap.isConfigured {
+            try? await FirebaseImageStorageService().deleteProfileImage(userID: userID)
+        }
+
+        if let authenticationService {
+            try await authenticationService.deleteAccount(userID: userID)
+        }
+
+        users.removeAll { $0.id == userID }
+        friendRequests.removeAll { $0.fromUserID == userID || $0.toUserID == userID }
+        events.removeAll { $0.createdByUserID == userID }
+        eventContributions.removeAll { $0.createdByUserID == userID }
+
+        events = events.map { event in
+            var updatedEvent = event
+            updatedEvent.likedUserIDs.remove(userID)
+            updatedEvent.likedAtByUserID.removeValue(forKey: userID)
+            updatedEvent.goingUserIDs.remove(userID)
+            return updatedEvent
+        }
+
+        eventContributions = eventContributions.map { contribution in
+            var updatedContribution = contribution
+            updatedContribution.likedUserIDs.remove(userID)
+            updatedContribution.likedAtByUserID.removeValue(forKey: userID)
+            return updatedContribution
         }
 
         currentUser = nil
@@ -484,14 +520,29 @@ extension AppSession {
     }
 
     var mvpLeaderboard: [MVPStanding] {
-        let eventPoints = Dictionary(grouping: events.filter { $0.moderationStatus == .approved }, by: \.createdByUserID)
+        mvpLeaderboard(in: nil)
+    }
+
+    var weeklyMVPLeaderboard: [MVPStanding] {
+        mvpLeaderboard(in: Calendar.current.dateInterval(of: .weekOfYear, for: .now))
+    }
+
+    private func mvpLeaderboard(in dateInterval: DateInterval?) -> [MVPStanding] {
+        let approvedEvents = events.filter { $0.moderationStatus == .approved }
+        let approvedContributions = eventContributions.filter { $0.moderationStatus == .approved }
+
+        let eventPoints = Dictionary(grouping: approvedEvents, by: \.createdByUserID)
             .mapValues { creatorEvents in
-                creatorEvents.reduce(0) { total, event in total + event.likeCount * 10 }
+                creatorEvents.reduce(0) { total, event in
+                    total + pointCount(from: event.likedAtByUserID, fallbackLikedUserIDs: event.likedUserIDs, fallbackDate: event.createdDate, in: dateInterval) * 10
+                }
             }
 
-        let contributionPoints = Dictionary(grouping: eventContributions.filter { $0.moderationStatus == .approved }, by: \.createdByUserID)
+        let contributionPoints = Dictionary(grouping: approvedContributions, by: \.createdByUserID)
             .mapValues { creatorContributions in
-                creatorContributions.reduce(0) { total, contribution in total + contribution.likeCount * 5 }
+                creatorContributions.reduce(0) { total, contribution in
+                    total + pointCount(from: contribution.likedAtByUserID, fallbackLikedUserIDs: contribution.likedUserIDs, fallbackDate: contribution.createdDate, in: dateInterval) * 5
+                }
             }
 
         let sortedUsers = users.sorted { lhs, rhs in
@@ -518,6 +569,24 @@ extension AppSession {
                 contributionLikePoints: contributionLikePoints
             )
         }
+    }
+
+    private func pointCount(
+        from likedAtByUserID: [String: Date],
+        fallbackLikedUserIDs: Set<String>,
+        fallbackDate: Date,
+        in dateInterval: DateInterval?
+    ) -> Int {
+        guard let dateInterval else { return fallbackLikedUserIDs.count }
+
+        if likedAtByUserID.isEmpty {
+            return dateInterval.contains(fallbackDate) ? fallbackLikedUserIDs.count : 0
+        }
+
+        return fallbackLikedUserIDs
+            .compactMap { likedAtByUserID[$0] }
+            .filter { dateInterval.contains($0) }
+            .count
     }
 
     func mvpStanding(for user: PopioUser?) -> MVPStanding? {
@@ -640,7 +709,9 @@ extension AppSession {
             moderationComment: nil,
             reviewedByUserID: nil,
             likedUserIDs: [],
-            goingUserIDs: []
+            likedAtByUserID: [:],
+            goingUserIDs: [],
+            createdDate: .now
         )
 
         if let eventService {
@@ -701,6 +772,7 @@ extension AppSession {
             moderationComment: nil,
             reviewedByUserID: nil,
             likedUserIDs: [],
+            likedAtByUserID: [:],
             createdDate: .now
         )
 
@@ -744,8 +816,10 @@ extension AppSession {
         var updatedContributions = eventContributions
         if updatedContributions[index].likedUserIDs.contains(currentUserID) {
             updatedContributions[index].likedUserIDs.remove(currentUserID)
+            updatedContributions[index].likedAtByUserID.removeValue(forKey: currentUserID)
         } else {
             updatedContributions[index].likedUserIDs.insert(currentUserID)
+            updatedContributions[index].likedAtByUserID[currentUserID] = .now
         }
         eventContributions = updatedContributions
 
@@ -769,8 +843,10 @@ extension AppSession {
         var updatedEvents = events
         if updatedEvents[index].likedUserIDs.contains(currentUserID) {
             updatedEvents[index].likedUserIDs.remove(currentUserID)
+            updatedEvents[index].likedAtByUserID.removeValue(forKey: currentUserID)
         } else {
             updatedEvents[index].likedUserIDs.insert(currentUserID)
+            updatedEvents[index].likedAtByUserID[currentUserID] = .now
         }
         events = updatedEvents
 

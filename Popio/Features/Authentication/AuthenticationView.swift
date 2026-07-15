@@ -29,6 +29,7 @@ struct AuthenticationView: View {
                         }
                     }
                 }
+                .toolbarBackground(.hidden, for: .navigationBar)
                 .background(ViewControllerReader { viewController in
                     presentingViewController = viewController
                 })
@@ -46,15 +47,26 @@ struct AuthenticationView: View {
                     .frame(maxWidth: .infinity)
             }
             .scrollDismissesKeyboard(.interactively)
-        } else {
-            ScrollView {
-                authStack
-                .padding(.horizontal, 30)
-                .padding(.vertical, 44)
-                .frame(maxWidth: 520)
-                .frame(maxWidth: .infinity)
+            .overlay(alignment: .top) {
+                AuthTopFade()
             }
-            .scrollDismissesKeyboard(.interactively)
+        } else {
+            GeometryReader { proxy in
+                ScrollView {
+                    VStack {
+                        Spacer(minLength: 24)
+
+                        authStack
+                            .padding(.horizontal, 30)
+                            .frame(maxWidth: 520)
+                            .frame(maxWidth: .infinity)
+
+                        Spacer(minLength: 24)
+                    }
+                    .frame(minHeight: proxy.size.height)
+                }
+                .scrollDismissesKeyboard(.interactively)
+            }
         }
     }
 
@@ -241,6 +253,24 @@ struct AuthenticationView: View {
             viewModel.refreshBiometricAvailability()
         }
         .padding(.bottom, viewModel.isRegistering ? 0 : 18)
+    }
+}
+
+private struct AuthTopFade: View {
+    var body: some View {
+        LinearGradient(
+            colors: [
+                Color.white,
+                Color.white,
+                Color.white.opacity(0.96),
+                Color.white.opacity(0)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(height: 44)
+        .ignoresSafeArea(edges: .top)
+        .allowsHitTesting(false)
     }
 }
 

@@ -96,6 +96,10 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
             throw AuthenticationServiceError.missingGoogleClientID
         }
 
+        guard hasGoogleURLScheme() else {
+            throw AuthenticationServiceError.missingGoogleURLScheme
+        }
+
         GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
         let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: viewController)
         let googleUser = result.user
@@ -140,6 +144,16 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
 
     func logout() async throws {
         try auth.signOut()
+    }
+
+    func deleteAccount(userID: String) async throws {
+        guard auth.currentUser?.uid == userID else {
+            throw AuthenticationServiceError.missingUserProfile
+        }
+
+        try await deleteAccountData(userID: userID)
+        try await auth.currentUser?.delete()
+        try? auth.signOut()
     }
 
     func updateProfile(userID: String, username: String, email: String, firstName: String, lastName: String, bio: String, instagramHandle: String) async throws -> PopioUser {
@@ -321,6 +335,119 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
         try await database.collection("users").document(user.id).setData(data, merge: true)
     }
 
+    private func deleteAccountData(userID: String) async throws {
+        let createdEvents = try await database.collection("events")
+            .whereField("createdByUserID", isEqualTo: userID)
+            .getDocuments()
+        let createdContributions = try await database.collection("eventContributions")
+            .whereField("createdByUserID", isEqualTo: userID)
+            .getDocuments()
+        let outgoingRequests = try await database.collection("friendRequests")
+            .whereField("fromUserID", isEqualTo: userID)
+            .getDocuments()
+        let incomingRequests = try await database.collection("friendRequests")
+            .whereField("toUserID", isEqualTo: userID)
+            .getDocuments()
+        let allEvents = try await database.collection("events").getDocuments()
+        let allContributions = try await database.collection("eventContributions").getDocuments()
+        let storageService = FirebaseImageStorageService()
+
+        try? await storageService.deleteProfileImage(userID: userID)
+
+        for document in createdEvents.documents {
+            try? await storageService.deleteEventImages(eventID: document.documentID)
+        }
+
+        for document in createdContributions.documents {
+            try? await storageService.deleteContributionImage(contributionID: document.documentID)
+        }
+
+        let batch = database.batch()
+
+        batch.deleteDocument(database.collection("users").document(userID))
+
+        for document in createdEvents.documents {
+            batch.deleteDocument(document.reference)
+        }
+
+        for document in createdContributions.documents {
+            batch.deleteDocument(document.reference)
+        }
+
+        for document in outgoingRequests.documents + incomingRequests.documents {
+            batch.deleteDocument(document.reference)
+        }
+
+        for document in allEvents.documents where document.data()["createdByUserID"] as? String != userID {
+            var updates: [String: Any] = [:]
+
+            if var likedUserIDs = document.data()["likedUserIDs"] as? [String], likedUserIDs.contains(userID) {
+                likedUserIDs.removeAll { $0 == userID }
+                updates["likedUserIDs"] = likedUserIDs
+            }
+
+            if var goingUserIDs = document.data()["goingUserIDs"] as? [String], goingUserIDs.contains(userID) {
+                goingUserIDs.removeAll { $0 == userID }
+                updates["goingUserIDs"] = goingUserIDs
+            }
+
+            if var likedAtByUserID = document.data()["likedAtByUserID"] as? [String: Any], likedAtByUserID[userID] != nil {
+                likedAtByUserID.removeValue(forKey: userID)
+                updates["likedAtByUserID"] = likedAtByUserID
+            }
+
+            if !updates.isEmpty {
+                batch.updateData(updates, forDocument: document.reference)
+            }
+        }
+
+        for document in allContributions.documents where document.data()["createdByUserID"] as? String != userID {
+            var updates: [String: Any] = [:]
+
+            if var likedUserIDs = document.data()["likedUserIDs"] as? [String], likedUserIDs.contains(userID) {
+                likedUserIDs.removeAll { $0 == userID }
+                updates["likedUserIDs"] = likedUserIDs
+            }
+
+            if var likedAtByUserID = document.data()["likedAtByUserID"] as? [String: Any], likedAtByUserID[userID] != nil {
+                likedAtByUserID.removeValue(forKey: userID)
+                updates["likedAtByUserID"] = likedAtByUserID
+            }
+
+            if !updates.isEmpty {
+                batch.updateData(updates, forDocument: document.reference)
+            }
+        }
+
+        try await batch.commit()
+    }
+
+    private func hasGoogleURLScheme() -> Bool {
+        guard let reversedClientID = googleServiceValue(forKey: "REVERSED_CLIENT_ID") else {
+            return false
+        }
+
+        guard let urlTypes = Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]] else {
+            return false
+        }
+
+        return urlTypes.contains { urlType in
+            guard let schemes = urlType["CFBundleURLSchemes"] as? [String] else { return false }
+            return schemes.contains(reversedClientID)
+        }
+    }
+
+    private func googleServiceValue(forKey key: String) -> String? {
+        guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+              let plist = NSDictionary(contentsOfFile: path),
+              let value = plist[key] as? String,
+              !value.isEmpty else {
+            return nil
+        }
+
+        return value
+    }
+
     private func displayName(firstName: String, lastName: String, fallback: String) -> String {
         let fullName = [firstName, lastName]
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -344,6 +471,7 @@ struct FirebaseAuthenticationService: AuthenticationServicing {
 enum AuthenticationServiceError: LocalizedError {
     case missingFirebaseConfiguration
     case missingGoogleClientID
+    case missingGoogleURLScheme
     case missingIdentityToken
     case missingUserProfile
     case usernameTaken
@@ -353,7 +481,9 @@ enum AuthenticationServiceError: LocalizedError {
         case .missingFirebaseConfiguration:
             return "Firebase is not configured. Add GoogleService-Info.plist to the app target."
         case .missingGoogleClientID:
-            return "Google Sign-In is not configured. Download a new GoogleService-Info.plist after enabling Google sign-in in Firebase."
+            return "Google Sign-In is missing CLIENT_ID. Enable Google sign-in in Firebase, then download a new GoogleService-Info.plist and add it to the app target."
+        case .missingGoogleURLScheme:
+            return "Google Sign-In is missing its callback URL scheme. Add REVERSED_CLIENT_ID from GoogleService-Info.plist to the app target's URL Types."
         case .missingIdentityToken:
             return "The identity provider did not return a valid sign-in token."
         case .missingUserProfile:

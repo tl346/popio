@@ -68,6 +68,12 @@ struct FirebaseEventService: EventServicing {
         let likedUserIDs = Set(data["likedUserIDs"] as? [String] ?? [])
         let goingUserIDs = Set(data["goingUserIDs"] as? [String] ?? [])
         let tags = data["tags"] as? [String] ?? []
+        let createdDate = (data["createdDate"] as? Timestamp)?.dateValue() ?? eventDate
+        let likedAtByUserID = parseLikeDates(
+            from: data["likedAtByUserID"],
+            fallbackLikedUserIDs: likedUserIDs,
+            fallbackDate: createdDate
+        )
 
         return PopioEvent(
             id: document.documentID,
@@ -94,7 +100,9 @@ struct FirebaseEventService: EventServicing {
             moderationComment: moderationComment,
             reviewedByUserID: reviewedByUserID,
             likedUserIDs: likedUserIDs,
-            goingUserIDs: goingUserIDs
+            likedAtByUserID: likedAtByUserID,
+            goingUserIDs: goingUserIDs,
+            createdDate: createdDate
         )
     }
 
@@ -114,7 +122,9 @@ struct FirebaseEventService: EventServicing {
             "isApproved": event.isApproved,
             "moderationStatus": event.moderationStatus.rawValue,
             "likedUserIDs": Array(event.likedUserIDs),
-            "goingUserIDs": Array(event.goingUserIDs)
+            "likedAtByUserID": event.likedAtByUserID.mapValues { Timestamp(date: $0) },
+            "goingUserIDs": Array(event.goingUserIDs),
+            "createdDate": Timestamp(date: event.createdDate)
         ]
 
         if let latitude = event.latitude {
@@ -171,6 +181,11 @@ struct FirebaseEventService: EventServicing {
         let moderationComment = data["moderationComment"] as? String
         let reviewedByUserID = data["reviewedByUserID"] as? String
         let likedUserIDs = Set(data["likedUserIDs"] as? [String] ?? [])
+        let likedAtByUserID = parseLikeDates(
+            from: data["likedAtByUserID"],
+            fallbackLikedUserIDs: likedUserIDs,
+            fallbackDate: createdDate
+        )
 
         return EventContribution(
             id: document.documentID,
@@ -185,6 +200,7 @@ struct FirebaseEventService: EventServicing {
             moderationComment: moderationComment,
             reviewedByUserID: reviewedByUserID,
             likedUserIDs: likedUserIDs,
+            likedAtByUserID: likedAtByUserID,
             createdDate: createdDate
         )
     }
@@ -199,6 +215,7 @@ struct FirebaseEventService: EventServicing {
             "text": contribution.text,
             "moderationStatus": contribution.moderationStatus.rawValue,
             "likedUserIDs": Array(contribution.likedUserIDs),
+            "likedAtByUserID": contribution.likedAtByUserID.mapValues { Timestamp(date: $0) },
             "createdDate": Timestamp(date: contribution.createdDate)
         ]
 
@@ -217,6 +234,28 @@ struct FirebaseEventService: EventServicing {
         return data
     }
 
+    private func parseLikeDates(
+        from value: Any?,
+        fallbackLikedUserIDs: Set<String>,
+        fallbackDate: Date
+    ) -> [String: Date] {
+        let fallbackDates = Dictionary(uniqueKeysWithValues: fallbackLikedUserIDs.map { ($0, fallbackDate) })
+
+        if let timestamps = value as? [String: Timestamp] {
+            return fallbackDates.merging(timestamps.mapValues { $0.dateValue() }) { _, storedDate in storedDate }
+        }
+
+        if let timestampValues = value as? [String: Any] {
+            let storedDates = timestampValues.reduce(into: [String: Date]()) { result, entry in
+                if let timestamp = entry.value as? Timestamp {
+                    result[entry.key] = timestamp.dateValue()
+                }
+            }
+            return fallbackDates.merging(storedDates) { _, storedDate in storedDate }
+        }
+
+        return fallbackDates
+    }
 }
 
 enum FirebaseEventServiceError: LocalizedError {

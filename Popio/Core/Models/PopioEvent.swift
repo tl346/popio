@@ -38,6 +38,7 @@ struct EventContribution: Identifiable, Hashable {
     var moderationComment: String?
     var reviewedByUserID: String?
     var likedUserIDs: Set<String>
+    var likedAtByUserID: [String: Date]
     let createdDate: Date
 
     var likeCount: Int {
@@ -70,7 +71,9 @@ struct PopioEvent: Identifiable, Hashable {
     var moderationComment: String?
     var reviewedByUserID: String?
     var likedUserIDs: Set<String>
+    var likedAtByUserID: [String: Date]
     var goingUserIDs: Set<String>
+    var createdDate: Date
 
     var likeCount: Int {
         likedUserIDs.count
@@ -117,7 +120,9 @@ extension PopioEvent {
             moderationComment: nil,
             reviewedByUserID: "user_001",
             likedUserIDs: ["user_001", "user_003"],
-            goingUserIDs: ["user_001"]
+            likedAtByUserID: ["user_001": .now, "user_003": .now],
+            goingUserIDs: ["user_001"],
+            createdDate: .now
         ),
         PopioEvent(
             id: "event_cards_001",
@@ -144,7 +149,9 @@ extension PopioEvent {
             moderationComment: nil,
             reviewedByUserID: "user_001",
             likedUserIDs: ["user_001"],
-            goingUserIDs: []
+            likedAtByUserID: ["user_001": .now],
+            goingUserIDs: [],
+            createdDate: .now
         )
     ]
 }
