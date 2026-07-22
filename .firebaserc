@@ -1,0 +1,11 @@
+{
+  "projects": {},
+  "targets": {},
+  "etags": {
+    "popup-app-39ef1": {
+      "extensionInstances": {
+        "firestore-send-email": "cb5fa9b4281ede7fce07fa55a66c78e9004eba73870b9400d429f43ae52ded75"
+      }
+    }
+  }
+}

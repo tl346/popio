@@ -371,7 +371,7 @@ private struct PopUpsMapPage: View {
 
     var body: some View {
         EventMapView(
-            events: viewModel.filteredEvents(from: session.approvedEvents),
+            events: viewModel.filteredEvents(from: session.discoveryEvents),
             centerCoordinate: viewModel.effectiveCoordinate,
             userCoordinate: viewModel.userCoordinate,
             distanceProvider: viewModel.distanceInMiles(for:),

@@ -69,7 +69,7 @@ struct CreateEventView: View {
                     dismiss()
                 }
             } message: {
-                Text("Your pop-up was submitted for review and will appear after approval.")
+                Text("Your pop-up is pending review. You can see it in the feed while it is being reviewed.")
             }
             .alert("Is this the same event?", isPresented: $isShowingDuplicateEventAlert) {
                 Button("Yes, cancel") {

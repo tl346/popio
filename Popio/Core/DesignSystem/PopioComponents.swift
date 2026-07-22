@@ -180,24 +180,26 @@ struct CategoryBadge: View {
             .font(PopioFont.caption2(.heavy))
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .foregroundStyle(color)
-            .background(color.opacity(0.08), in: Capsule())
+            .foregroundStyle(category.badgeTint)
+            .background(category.badgeTint.opacity(0.10), in: Capsule())
             .overlay {
                 Capsule()
-                    .stroke(color.opacity(0.26), lineWidth: 1)
+                    .stroke(category.badgeTint.opacity(0.28), lineWidth: 1)
             }
     }
+}
 
-    private var color: Color {
-        switch category {
+extension EventCategory {
+    var badgeTint: Color {
+        switch self {
         case .food:
-            return PopioTheme.coral
+            return Color(red: 0.82, green: 0.34, blue: 0.28)
         case .matcha:
-            return PopioTheme.accent
+            return Color(red: 0.25, green: 0.53, blue: 0.42)
         case .cards:
-            return PopioTheme.gold
+            return Color(red: 0.35, green: 0.47, blue: 0.78)
         case .farmersMarket:
-            return PopioTheme.accent
+            return Color(red: 0.68, green: 0.46, blue: 0.12)
         }
     }
 }

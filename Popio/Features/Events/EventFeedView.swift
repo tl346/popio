@@ -34,7 +34,7 @@ struct EventFeedView: View {
                 .zIndex(2)
 
                 ScrollView {
-                    let events = viewModel.filteredEvents(from: session.approvedEvents)
+                    let events = viewModel.filteredEvents(from: session.discoveryEvents)
                     let columns = [
                         GridItem(.flexible(), spacing: 12),
                         GridItem(.flexible(), spacing: 12)
@@ -1126,7 +1126,7 @@ private struct MapCarouselCard: View {
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
 
-                        EventCategoryBadge(category: event.category.rawValue)
+                        EventCategoryBadge(category: event.category)
 
                         VStack(alignment: .leading, spacing: 4) {
                             EventCardMetaRow(systemImage: "mappin", text: locationText)
@@ -1186,14 +1186,14 @@ private struct MapCarouselCard: View {
                 .frame(width: 160, height: 160)
                 .clipped()
 
-            Text(datePillText)
-                .font(PopioFont.custom(size: 10.5, weight: .semibold))
-                .foregroundStyle(Color.black)
-                .lineLimit(1)
-                .padding(.horizontal, 9)
-                .frame(height: 25)
-                .background(Color(red: 0.90, green: 0.84, blue: 1.00), in: Capsule())
+            EventDateGlassBadge(text: datePillText)
                 .padding(8)
+        }
+        .overlay(alignment: .topTrailing) {
+            if event.moderationStatus == .pending {
+                EventPendingBadge()
+                    .padding(8)
+            }
         }
     }
 
@@ -1284,7 +1284,7 @@ struct EventCardView: View {
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
 
-                        EventCategoryBadge(category: event.category.rawValue)
+                        EventCategoryBadge(category: event.category)
 
                         VStack(alignment: .leading, spacing: 4) {
                             EventCardMetaRow(systemImage: "mappin", text: locationText)
@@ -1345,14 +1345,14 @@ struct EventCardView: View {
                     .frame(width: proxy.size.width, height: proxy.size.width)
                     .clipped()
 
-                Text(datePillText)
-                    .font(PopioFont.custom(size: 10.5, weight: .semibold))
-                    .foregroundStyle(Color.black)
-                    .lineLimit(1)
-                    .padding(.horizontal, 9)
-                    .frame(height: 25)
-                    .background(Color(red: 0.90, green: 0.84, blue: 1.00), in: Capsule())
+                EventDateGlassBadge(text: datePillText)
                     .padding(8)
+            }
+            .overlay(alignment: .topTrailing) {
+                if event.moderationStatus == .pending {
+                    EventPendingBadge()
+                        .padding(8)
+                }
             }
         }
         .aspectRatio(1, contentMode: .fit)
@@ -1408,16 +1408,67 @@ private struct EventCardMetaRow: View {
 }
 
 private struct EventCategoryBadge: View {
-    let category: String
+    let category: EventCategory
 
     var body: some View {
-        Text(category)
+        Text(category.rawValue)
             .font(PopioFont.custom(size: 9.5, weight: .semibold))
-            .foregroundStyle(PopioTheme.gold)
+            .foregroundStyle(category.badgeTint)
             .lineLimit(1)
             .padding(.horizontal, 8)
             .frame(height: 21)
-            .background(PopioTheme.gold.opacity(0.14), in: Capsule())
+            .background(category.badgeTint.opacity(0.12), in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(category.badgeTint.opacity(0.22), lineWidth: 0.75)
+            }
+    }
+}
+
+private struct EventDateGlassBadge: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(PopioFont.custom(size: 10.5, weight: .semibold))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .padding(.horizontal, 9)
+            .frame(height: 25)
+            .background {
+                Capsule()
+                    .fill(Color.white.opacity(0.13))
+                    .overlay {
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.16), Color.white.opacity(0.035)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                    .overlay {
+                        Capsule()
+                            .stroke(Color.white.opacity(0.55), lineWidth: 0.75)
+                    }
+            }
+            .shadow(color: Color.black.opacity(0.55), radius: 1.2, y: 1)
+    }
+}
+
+private struct EventPendingBadge: View {
+    var body: some View {
+        Label("Pending", systemImage: "clock.fill")
+            .font(PopioFont.custom(size: 9.5, weight: .semibold))
+            .foregroundStyle(PopioTheme.ink)
+            .padding(.horizontal, 8)
+            .frame(height: 25)
+            .background(PopioTheme.gold.opacity(0.92), in: Capsule())
+            .overlay {
+                Capsule().stroke(Color.white.opacity(0.65), lineWidth: 0.75)
+            }
+            .accessibilityLabel("Pending approval")
     }
 }
 

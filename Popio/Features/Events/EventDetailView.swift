@@ -16,6 +16,13 @@ struct EventDetailView: View {
     @State private var expandedPhoto: EventContribution?
     @State private var activeReportRequest: UGCReportRequest?
     @State private var userIDToBlock: String?
+    @State private var isShowingRejectionSheet = false
+    @State private var isReviewingEvent = false
+    @State private var reviewErrorMessage: String?
+    @State private var isShowingAdminEditor = false
+    @State private var isConfirmingEventDeletion = false
+    @State private var isDeletingEvent = false
+    @State private var adminActionError: String?
 
     init(event: PopioEvent, opensChat: Bool = false, isAdminReview: Bool = false) {
         self.event = event
@@ -52,7 +59,7 @@ struct EventDetailView: View {
             Task {
                 if let imageData = try? await jpegData(from: newValue) {
                     session.submitContribution(for: currentEvent, type: .picture, imageData: imageData)
-                    submissionMessage = "Picture added."
+                    submissionMessage = "Photo submitted for review."
                 }
                 pictureData = nil
                 selectedPicture = nil
@@ -70,6 +77,52 @@ struct EventDetailView: View {
                 .environmentObject(session)
                 .presentationDetents([.height(360)])
                 .presentationDragIndicator(.hidden)
+        }
+        .sheet(isPresented: $isShowingRejectionSheet) {
+            EventRejectionSheet(eventTitle: currentEvent.title) { comment in
+                try await session.reviewEvent(currentEvent, status: .rejected, comment: comment)
+                dismiss()
+            }
+            .presentationDetents([.height(410)])
+            .presentationDragIndicator(.hidden)
+        }
+        .sheet(isPresented: $isShowingAdminEditor) {
+            AdminEventEditor(event: currentEvent) { updatedEvent in
+                try await session.updateEvent(updatedEvent)
+            }
+            .environmentObject(session)
+        }
+        .confirmationDialog(
+            "Delete this pop-up?",
+            isPresented: $isConfirmingEventDeletion,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Pop-up", role: .destructive) {
+                Task {
+                    isDeletingEvent = true
+                    defer { isDeletingEvent = false }
+                    do {
+                        try await session.deleteEvent(currentEvent)
+                        dismiss()
+                    } catch {
+                        adminActionError = error.localizedDescription
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently removes the event and its photos and chat messages.")
+        }
+        .alert(
+            "Admin action failed",
+            isPresented: Binding(
+                get: { adminActionError != nil },
+                set: { if !$0 { adminActionError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { adminActionError = nil }
+        } message: {
+            Text(adminActionError ?? "Please try again.")
         }
         .confirmationDialog(
             "Block this user?",
@@ -160,8 +213,26 @@ struct EventDetailView: View {
 
     @ViewBuilder
     private var safetyMenu: some View {
-        if let creator = session.users.first(where: { $0.id == currentEvent.createdByUserID }),
-           creator.id != session.currentUser?.id {
+        if session.currentUser?.isAdmin == true {
+            Menu {
+                Button {
+                    isShowingAdminEditor = true
+                } label: {
+                    Label("Edit Pop-up", systemImage: "pencil")
+                }
+
+                Button(role: .destructive) {
+                    isConfirmingEventDeletion = true
+                } label: {
+                    Label("Delete Pop-up", systemImage: "trash")
+                }
+                .disabled(isDeletingEvent)
+            } label: {
+                EventDetailCircleActionButton(systemImage: "ellipsis", foreground: PopioTheme.ink, background: .white)
+            }
+            .accessibilityLabel("Event administration options")
+        } else if let creator = session.users.first(where: { $0.id == currentEvent.createdByUserID }),
+                  creator.id != session.currentUser?.id {
             Menu {
                 Button(role: .destructive) {
                     activeReportRequest = UGCReportRequest(
@@ -462,11 +533,28 @@ struct EventDetailView: View {
 
     private var adminReviewActionBar: some View {
         VStack(spacing: 10) {
+            if let reviewErrorMessage {
+                Text(reviewErrorMessage)
+                    .font(PopioFont.caption(.semibold))
+                    .foregroundStyle(PopioTheme.coral)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             Button {
-                session.reviewEvent(currentEvent, status: .approved, comment: "")
-                dismiss()
+                Task {
+                    reviewErrorMessage = nil
+                    isReviewingEvent = true
+                    defer { isReviewingEvent = false }
+
+                    do {
+                        try await session.reviewEvent(currentEvent, status: .approved, comment: "")
+                        dismiss()
+                    } catch {
+                        reviewErrorMessage = error.localizedDescription
+                    }
+                }
             } label: {
-                Label("Approve", systemImage: "checkmark.circle.fill")
+                Label(isReviewingEvent ? "Approving..." : "Approve", systemImage: "checkmark.circle.fill")
                     .font(PopioFont.custom(size: 15, weight: .semibold))
                     .frame(maxWidth: .infinity)
                     .frame(height: 46)
@@ -474,11 +562,12 @@ struct EventDetailView: View {
             .foregroundStyle(.white)
             .background(eventActionGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .buttonStyle(.plain)
+            .disabled(isReviewingEvent)
             .accessibilityLabel("Approve pop-up")
 
             Button {
-                session.reviewEvent(currentEvent, status: .rejected, comment: "")
-                dismiss()
+                reviewErrorMessage = nil
+                isShowingRejectionSheet = true
             } label: {
                 Label("Reject", systemImage: "xmark.circle.fill")
                     .font(PopioFont.custom(size: 15, weight: .semibold))
@@ -492,6 +581,7 @@ struct EventDetailView: View {
                     .stroke(PopioTheme.coral.opacity(0.62), lineWidth: 1)
             }
             .buttonStyle(.plain)
+            .disabled(isReviewingEvent)
             .accessibilityLabel("Reject pop-up")
         }
         .padding(.horizontal, 16)
@@ -743,6 +833,328 @@ struct EventDetailView: View {
         guard let data = try await item.loadTransferable(type: Data.self) else { return nil }
         guard let image = UIImage(data: data) else { return data }
         return image.jpegData(compressionQuality: 0.85)
+    }
+}
+
+private struct AdminEventEditor: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let event: PopioEvent
+    let save: (PopioEvent) async throws -> Void
+
+    @State private var title: String
+    @State private var description: String
+    @State private var category: EventCategory
+    @State private var address: String
+    @State private var eventDate: Date
+    @State private var startTime: Date
+    @State private var endTime: Date
+    @State private var hasStartTime: Bool
+    @State private var hasEndTime: Bool
+    @State private var tags: String
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    init(event: PopioEvent, save: @escaping (PopioEvent) async throws -> Void) {
+        self.event = event
+        self.save = save
+        _title = State(initialValue: event.title)
+        _description = State(initialValue: event.description)
+        _category = State(initialValue: event.category)
+        _address = State(initialValue: event.address)
+        _eventDate = State(initialValue: event.eventDate)
+        _startTime = State(initialValue: event.startTime ?? event.eventDate)
+        _endTime = State(initialValue: event.endTime ?? event.startTime ?? event.eventDate)
+        _hasStartTime = State(initialValue: event.startTime != nil)
+        _hasEndTime = State(initialValue: event.endTime != nil)
+        _tags = State(initialValue: event.tags.joined(separator: ", "))
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    editorHeader
+                    fieldSection("Event details") {
+                        editorTextField("Event name", text: $title)
+
+                        Picker("Category", selection: $category) {
+                            ForEach(EventCategory.allCases) { category in
+                                Text(category.rawValue).tag(category)
+                            }
+                        }
+                        .tint(PopioTheme.gold)
+
+                        TextField("Description", text: $description, axis: .vertical)
+                            .lineLimit(4...8)
+                            .popioField()
+                    }
+
+                    fieldSection("Location") {
+                        editorTextField("Address", text: $address)
+                    }
+
+                    fieldSection("Schedule") {
+                        DatePicker("Event date", selection: $eventDate, displayedComponents: .date)
+
+                        Toggle("Start time", isOn: $hasStartTime)
+                            .tint(PopioTheme.gold)
+                        if hasStartTime {
+                            DatePicker("Starts", selection: $startTime, displayedComponents: .hourAndMinute)
+                        }
+
+                        Toggle("End time", isOn: $hasEndTime)
+                            .tint(PopioTheme.gold)
+                        if hasEndTime {
+                            DatePicker("Ends", selection: $endTime, displayedComponents: .hourAndMinute)
+                        }
+                    }
+
+                    fieldSection("Tags") {
+                        editorTextField("Comma-separated tags", text: $tags)
+                    }
+
+                    if let errorMessage {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .font(PopioFont.caption(.semibold))
+                            .foregroundStyle(PopioTheme.coral)
+                    }
+                }
+                .padding(16)
+                .padding(.bottom, 88)
+            }
+            .scrollIndicators(.hidden)
+            .background(PopioTheme.background)
+            .navigationBarHidden(true)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Button {
+                    Task { await persistChanges() }
+                } label: {
+                    HStack(spacing: 8) {
+                        if isSaving { ProgressView().tint(.white) }
+                        Text(isSaving ? "Saving..." : "Save Changes")
+                            .font(PopioFont.custom(size: 16, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(PopioTheme.gold, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(isSaving || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(PopioTheme.backgroundElevated)
+            }
+        }
+    }
+
+    private var editorHeader: some View {
+        HStack {
+            Button("Cancel") { dismiss() }
+                .foregroundStyle(PopioTheme.muted)
+            Spacer()
+            Text("Edit Pop-up")
+                .font(PopioFont.custom(size: 20, weight: .semibold))
+                .foregroundStyle(PopioTheme.ink)
+            Spacer()
+            Text("Cancel").hidden()
+        }
+        .frame(height: 44)
+    }
+
+    private func fieldSection<Content: View>(
+        _ heading: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(heading)
+                .font(PopioFont.custom(size: 15, weight: .semibold))
+                .foregroundStyle(PopioTheme.ink)
+            content()
+        }
+        .popioCard(cornerRadius: 22, padding: 16)
+    }
+
+    private func editorTextField(_ placeholder: String, text: Binding<String>) -> some View {
+        TextField(placeholder, text: text)
+            .popioField()
+    }
+
+    private func persistChanges() async {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty, !trimmedAddress.isEmpty else {
+            errorMessage = "An event name and address are required."
+            return
+        }
+
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+
+        do {
+            var updatedEvent = event
+            updatedEvent.title = trimmedTitle
+            updatedEvent.description = description.trimmingCharacters(in: .whitespacesAndNewlines)
+            updatedEvent.category = category
+            updatedEvent.address = trimmedAddress
+            updatedEvent.eventDate = eventDate
+            updatedEvent.startTime = hasStartTime ? startTime : nil
+            updatedEvent.endTime = hasEndTime ? endTime : nil
+            updatedEvent.tags = tags
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+
+            if trimmedAddress.caseInsensitiveCompare(event.address) != .orderedSame {
+                let request = MKLocalSearch.Request()
+                request.naturalLanguageQuery = trimmedAddress
+                guard let coordinate = try await MKLocalSearch(request: request).start().mapItems.first?.placemark.coordinate else {
+                    throw AdminEventEditorError.locationNotFound
+                }
+                updatedEvent.latitude = coordinate.latitude
+                updatedEvent.longitude = coordinate.longitude
+            }
+
+            try await save(updatedEvent)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private enum AdminEventEditorError: LocalizedError {
+    case locationNotFound
+
+    var errorDescription: String? {
+        "That address could not be located. Try a more specific address."
+    }
+}
+
+private struct EventRejectionSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let eventTitle: String
+    let reject: (String) async throws -> Void
+
+    @State private var comment = ""
+    @State private var isSubmitting = false
+    @State private var errorMessage: String?
+
+    private let characterLimit = 500
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Capsule()
+                .fill(PopioTheme.ink.opacity(0.14))
+                .frame(width: 42, height: 5)
+                .frame(maxWidth: .infinity)
+
+            HStack(spacing: 12) {
+                Image(systemName: "text.bubble.fill")
+                    .font(PopioFont.custom(size: 18, weight: .semibold))
+                    .foregroundStyle(PopioTheme.coral)
+                    .frame(width: 42, height: 42)
+                    .background(PopioTheme.coral.opacity(0.12), in: Circle())
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Why is this pop-up being rejected?")
+                        .font(PopioFont.custom(size: 17, weight: .semibold))
+                        .foregroundStyle(PopioTheme.ink)
+
+                    Text(eventTitle)
+                        .font(PopioFont.custom(size: 12.5, weight: .medium))
+                        .foregroundStyle(PopioTheme.muted)
+                        .lineLimit(1)
+                }
+            }
+
+            TextField("Share a clear reason with the event creator...", text: $comment, axis: .vertical)
+                .lineLimit(5...7)
+                .font(PopioFont.custom(size: 14, weight: .medium))
+                .foregroundStyle(PopioTheme.ink)
+                .padding(14)
+                .frame(maxWidth: .infinity, minHeight: 128, alignment: .topLeading)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(PopioTheme.coral.opacity(0.30), lineWidth: 1)
+                }
+                .onChange(of: comment) { _, newValue in
+                    guard newValue.count > characterLimit else { return }
+                    comment = String(newValue.prefix(characterLimit))
+                }
+
+            HStack {
+                Text("The creator will receive this in their mailbox.")
+                    .font(PopioFont.custom(size: 11, weight: .medium))
+                    .foregroundStyle(PopioTheme.muted)
+
+                Spacer()
+
+                Text("\(comment.count)/\(characterLimit)")
+                    .font(PopioFont.custom(size: 11, weight: .medium))
+                    .foregroundStyle(PopioTheme.muted)
+                    .monospacedDigit()
+            }
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(PopioFont.caption(.semibold))
+                    .foregroundStyle(PopioTheme.coral)
+            }
+
+            HStack(spacing: 10) {
+                Button("Cancel") {
+                    dismiss()
+                }
+                .font(PopioFont.custom(size: 14, weight: .semibold))
+                .foregroundStyle(PopioTheme.ink)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(PopioTheme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(PopioTheme.line, lineWidth: 1)
+                }
+
+                Button {
+                    Task {
+                        isSubmitting = true
+                        errorMessage = nil
+                        defer { isSubmitting = false }
+
+                        do {
+                            try await reject(comment)
+                        } catch {
+                            errorMessage = error.localizedDescription
+                        }
+                    }
+                } label: {
+                    Text(isSubmitting ? "Sending..." : "Reject & Send")
+                        .font(PopioFont.custom(size: 14, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                }
+                .foregroundStyle(.white)
+                .background(PopioTheme.coral, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .disabled(comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmitting)
+                .opacity(comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmitting ? 0.55 : 1)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 12)
+        .padding(.bottom, 18)
+        .background(
+            LinearGradient(
+                colors: [Color.white, PopioTheme.coral.opacity(0.07), Color.white],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+        )
     }
 }
 
@@ -1136,6 +1548,8 @@ private struct UGCReportSheet: View {
     @State private var selectedReason = "Inappropriate content"
     @State private var details = ""
     @State private var didSubmit = false
+    @State private var isSubmitting = false
+    @State private var submissionError: String?
 
     private let reasons = [
         "Inappropriate content",
@@ -1145,7 +1559,6 @@ private struct UGCReportSheet: View {
         "Other"
     ]
     private let characterLimit = 500
-    private let adminEmail = "popioadmin@gmail.com"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -1204,21 +1617,36 @@ private struct UGCReportSheet: View {
                 }
             }
 
+            if let submissionError {
+                Label(submissionError, systemImage: "exclamationmark.triangle.fill")
+                    .font(PopioFont.custom(size: 12, weight: .semibold))
+                    .foregroundStyle(PopioTheme.coral)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             Button {
-                session.reportContent(
-                    targetType: request.targetType,
-                    targetID: request.targetID,
-                    reportedUserID: request.reportedUserID,
-                    reason: selectedReason,
-                    details: details
-                )
-                openReportEmail()
-                didSubmit = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                    dismiss()
+                Task {
+                    isSubmitting = true
+                    submissionError = nil
+                    defer { isSubmitting = false }
+
+                    do {
+                        try await session.reportContent(
+                            targetType: request.targetType,
+                            targetID: request.targetID,
+                            reportedUserID: request.reportedUserID,
+                            reason: selectedReason,
+                            details: details
+                        )
+                        didSubmit = true
+                        try? await Task.sleep(for: .milliseconds(550))
+                        dismiss()
+                    } catch {
+                        submissionError = error.localizedDescription
+                    }
                 }
             } label: {
-                Label("Submit Report", systemImage: "flag.fill")
+                Label(isSubmitting ? "Submitting..." : "Submit Report", systemImage: "flag.fill")
                     .font(PopioFont.custom(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -1226,43 +1654,12 @@ private struct UGCReportSheet: View {
                     .background(PopioTheme.coral, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
             .buttonStyle(.plain)
-            .disabled(didSubmit)
-            .opacity(didSubmit ? 0.65 : 1)
+            .disabled(didSubmit || isSubmitting)
+            .opacity(didSubmit || isSubmitting ? 0.65 : 1)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 14)
         .background(PopioTheme.background.ignoresSafeArea())
-    }
-
-    private func openReportEmail() {
-        let body = """
-        Popio UGC Report
-
-        Type: \(request.targetType.rawValue)
-        Target ID: \(request.targetID)
-        Reported User: @\(request.reportedUsername)
-        Reported User ID: \(request.reportedUserID)
-        Reporter ID: \(session.currentUser?.id ?? "Unknown")
-        Reason: \(selectedReason)
-
-        Details:
-        \(details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "None provided" : details.trimmingCharacters(in: .whitespacesAndNewlines))
-        """
-
-        openAdminEmail(subject: "Popio Report - \(request.targetType.rawValue)", body: body)
-    }
-
-    private func openAdminEmail(subject: String, body: String) {
-        var components = URLComponents()
-        components.scheme = "mailto"
-        components.path = adminEmail
-        components.queryItems = [
-            URLQueryItem(name: "subject", value: subject),
-            URLQueryItem(name: "body", value: body)
-        ]
-
-        guard let url = components.url else { return }
-        UIApplication.shared.open(url)
     }
 }
 
@@ -1508,9 +1905,9 @@ struct EventChatView: View {
                     .foregroundStyle(PopioTheme.ink)
                     .lineLimit(1)
 
-                Text("Event chat")
+                Text(currentEvent.isArchived ? "Archived event · Chat history" : "Event chat")
                     .font(PopioFont.custom(size: 12, weight: .medium))
-                    .foregroundStyle(PopioTheme.muted)
+                    .foregroundStyle(currentEvent.isArchived ? PopioTheme.gold : PopioTheme.muted)
             }
 
             Spacer(minLength: 0)

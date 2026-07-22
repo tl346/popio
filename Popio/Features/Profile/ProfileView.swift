@@ -7,8 +7,6 @@ struct ProfileView: View {
     @StateObject private var viewModel = ProfileViewModel()
     @State private var isShowingEditProfile = false
     @State private var editProfileInitialFocus: EditProfileFocusedField?
-    @State private var isShowingProfileMenu = false
-    @State private var isConfirmingSignOut = false
     @State private var activeSupportSheet: ProfileSupportRequestType?
     @State private var selectedActivityTab: ProfileActivityTab = .going
 
@@ -34,6 +32,9 @@ struct ProfileView: View {
             .onAppear {
                 viewModel.load(from: session.currentUser)
             }
+            .task {
+                await session.refreshMailbox()
+            }
             .sheet(isPresented: $isShowingEditProfile) {
                 EditProfileView(
                     viewModel: viewModel,
@@ -41,57 +42,6 @@ struct ProfileView: View {
                     initialFocus: editProfileInitialFocus
                 )
                     .environmentObject(session)
-            }
-            .sheet(isPresented: $isShowingProfileMenu) {
-                ProfileOptionsSheet(
-                    editProfile: {
-                        viewModel.load(from: session.currentUser)
-                        editProfileInitialFocus = nil
-                        isShowingProfileMenu = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                            isShowingEditProfile = true
-                        }
-                    },
-                    submitFeedback: {
-                        isShowingProfileMenu = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                            activeSupportSheet = .feedback
-                        }
-                    },
-                    reportBug: {
-                        isShowingProfileMenu = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                            activeSupportSheet = .bug
-                        }
-                    },
-                    contactSupport: {
-                        isShowingProfileMenu = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                            activeSupportSheet = .contact
-                        }
-                    },
-                    signOut: {
-                        isShowingProfileMenu = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                            isConfirmingSignOut = true
-                        }
-                    }
-                )
-                .presentationDetents([.height(360)])
-                .presentationDragIndicator(.hidden)
-            }
-            .confirmationDialog(
-                "Are you sure you want to sign out?",
-                isPresented: $isConfirmingSignOut,
-                titleVisibility: .visible
-            ) {
-                Button("Sign Out", role: .destructive) {
-                    Task {
-                        try? await session.logout()
-                    }
-                }
-
-                Button("Cancel", role: .cancel) {}
             }
             .sheet(item: $activeSupportSheet) { sheet in
                 FeedbackFormSheet(type: sheet)
@@ -108,16 +58,37 @@ struct ProfileView: View {
         HStack {
             Spacer()
 
-            Button {
-                isShowingProfileMenu = true
+            NavigationLink {
+                ProfileMenuPage(
+                    editProfile: {
+                        viewModel.load(from: session.currentUser)
+                        editProfileInitialFocus = nil
+                        isShowingEditProfile = true
+                    },
+                    submitFeedback: { activeSupportSheet = .feedback },
+                    reportBug: { activeSupportSheet = .bug },
+                    contactSupport: { activeSupportSheet = .contact }
+                )
             } label: {
-                Image(systemName: "ellipsis")
+                Image(systemName: "line.3.horizontal")
                     .font(PopioFont.custom(size: 17, weight: .bold))
                     .foregroundStyle(ProfilePalette.orange)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+                    .overlay(alignment: .topTrailing) {
+                        if session.unreadMailboxCount > 0 {
+                            Circle()
+                                .fill(PopioTheme.coral)
+                                .frame(width: 9, height: 9)
+                                .overlay {
+                                    Circle().stroke(Color.white, lineWidth: 1.5)
+                                }
+                                .offset(x: -4, y: 5)
+                        }
+                    }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Profile options")
+            .accessibilityLabel("Open menu")
         }
         .padding(.horizontal, 16)
         .padding(.top, 6)
@@ -302,7 +273,7 @@ struct ProfileView: View {
             .filter {
                 $0.createdByUserID == currentUserID
                     && $0.type == .review
-                    && $0.moderationStatus == .approved
+                    && $0.moderationStatus != .rejected
             },
             by: \.eventID
         )
@@ -515,89 +486,416 @@ private struct ProfileStatDivider: View {
     }
 }
 
-private struct ProfileOptionsSheet: View {
+private struct ProfileMenuPage: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var session: AppSession
     let editProfile: () -> Void
     let submitFeedback: () -> Void
     let reportBug: () -> Void
     let contactSupport: () -> Void
-    let signOut: () -> Void
+    @State private var isConfirmingSignOut = false
 
     var body: some View {
-        VStack(spacing: 10) {
-            Capsule()
-                .fill(Color.black.opacity(0.14))
-                .frame(width: 42, height: 5)
-                .padding(.top, 10)
+        VStack(spacing: 0) {
+            brandedMenuHeader
 
-            ProfileMenuButton(
-                title: "Edit Profile",
-                systemImage: "pencil",
-                tint: PopioTheme.accent,
-                action: editProfile
-            )
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(spacing: 0) {
+                        NavigationLink {
+                            MailboxView()
+                        } label: {
+                            ProfileMenuRow(
+                                title: "Mailbox",
+                                subtitle: "Approval updates and moderator notes",
+                                systemImage: "envelope.fill",
+                                tint: PopioTheme.gold,
+                                badgeCount: session.unreadMailboxCount
+                            )
+                        }
+                        .buttonStyle(.plain)
 
-            ProfileMenuButton(
-                title: "Submit Feedback",
-                systemImage: "text.bubble",
-                tint: PopioTheme.gold,
-                action: submitFeedback
-            )
+                        ProfileMenuDivider()
 
-            ProfileMenuButton(
-                title: "Report Bug",
-                systemImage: "ladybug",
-                tint: PopioTheme.coral,
-                action: reportBug
-            )
+                        Button(action: editProfile) {
+                            ProfileMenuRow(
+                                title: "Edit Profile",
+                                subtitle: "Update your details and photo",
+                                systemImage: "person.crop.circle.fill",
+                                tint: PopioTheme.accent
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .stroke(ProfilePalette.line, lineWidth: 1)
+                    }
 
-            ProfileMenuButton(
-                title: "Contact Support",
-                systemImage: "envelope",
-                tint: PopioTheme.accent,
-                action: contactSupport
-            )
+                    menuSectionTitle("Support")
 
-            ProfileMenuButton(
-                title: "Sign Out",
-                systemImage: "rectangle.portrait.and.arrow.right",
-                tint: PopioTheme.coral,
-                style: .outline,
-                action: signOut
+                    VStack(spacing: 0) {
+                        Button(action: submitFeedback) {
+                            ProfileMenuRow(
+                                title: "Submit Feedback",
+                                subtitle: "Help shape the next Popio update",
+                                systemImage: "text.bubble.fill",
+                                tint: PopioTheme.gold
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        ProfileMenuDivider()
+
+                        Button(action: reportBug) {
+                            ProfileMenuRow(
+                                title: "Report a Bug",
+                                subtitle: "Tell us when something isn't working",
+                                systemImage: "ladybug.fill",
+                                tint: PopioTheme.coral
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        ProfileMenuDivider()
+
+                        Button(action: contactSupport) {
+                            ProfileMenuRow(
+                                title: "Contact Support",
+                                subtitle: "Get help with your account or safety",
+                                systemImage: "lifepreserver.fill",
+                                tint: PopioTheme.accent
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .stroke(ProfilePalette.line, lineWidth: 1)
+                    }
+
+                    Button {
+                        isConfirmingSignOut = true
+                    } label: {
+                        Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                            .font(PopioFont.custom(size: 15, weight: .semibold))
+                            .foregroundStyle(PopioTheme.coral)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(PopioTheme.coral.opacity(0.48), lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 22)
+                .padding(.bottom, 110)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .background(
+            LinearGradient(
+                colors: [Color.white, PopioTheme.accentSoft.opacity(0.56), Color.white],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
+            .ignoresSafeArea()
+        )
+        .navigationTitle("")
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
+        .task {
+            await session.refreshMailbox()
+        }
+        .confirmationDialog(
+            "Are you sure you want to sign out?",
+            isPresented: $isConfirmingSignOut,
+            titleVisibility: .visible
+        ) {
+            Button("Sign Out", role: .destructive) {
+                Task {
+                    try? await session.logout()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    private var brandedMenuHeader: some View {
+        HStack(spacing: 12) {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(PopioFont.custom(size: 16, weight: .semibold))
+                    .foregroundStyle(ProfilePalette.ink)
+                    .frame(width: 44, height: 44)
+                    .background(Color.white.opacity(0.86), in: Circle())
+                    .overlay {
+                        Circle().stroke(ProfilePalette.line, lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back to profile")
+
+            Image("popioicon")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 38, height: 38)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Menu")
+                    .font(PopioFont.custom(size: 21, weight: .semibold))
+                    .foregroundStyle(ProfilePalette.ink)
+
+                Text("Your Popio hub")
+                    .font(PopioFont.custom(size: 11.5, weight: .medium))
+                    .foregroundStyle(ProfilePalette.body)
+            }
+
+            Spacer()
         }
         .padding(.horizontal, 16)
-        .padding(.bottom, 14)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color.white.ignoresSafeArea())
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+        .background(Color.white.opacity(0.92))
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(ProfilePalette.line)
+                .frame(height: 1)
+        }
+    }
+
+    private func menuSectionTitle(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(PopioFont.custom(size: 11, weight: .semibold))
+            .foregroundStyle(ProfilePalette.body)
+            .tracking(1.1)
+            .padding(.leading, 4)
     }
 }
 
-private struct ProfileMenuButton: View {
+private struct ProfileMenuRow: View {
     let title: String
+    let subtitle: String
     let systemImage: String
     let tint: Color
-    var style: Style = .filled
-    let action: () -> Void
+    var badgeCount = 0
 
-    enum Style {
-        case filled
-        case outline
+    var body: some View {
+        HStack(spacing: 13) {
+            Image(systemName: systemImage)
+                .font(PopioFont.custom(size: 16, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 42, height: 42)
+                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(PopioFont.custom(size: 14.5, weight: .semibold))
+                    .foregroundStyle(ProfilePalette.ink)
+
+                Text(subtitle)
+                    .font(PopioFont.custom(size: 11.5, weight: .medium))
+                    .foregroundStyle(ProfilePalette.body)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            if badgeCount > 0 {
+                Text("\(badgeCount)")
+                    .font(PopioFont.custom(size: 11, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(minWidth: 22, minHeight: 22)
+                    .background(PopioTheme.coral, in: Capsule())
+            }
+
+            Image(systemName: "chevron.right")
+                .font(PopioFont.custom(size: 12, weight: .semibold))
+                .foregroundStyle(ProfilePalette.body.opacity(0.72))
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 68)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct ProfileMenuDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(ProfilePalette.line)
+            .frame(height: 1)
+            .padding(.leading, 69)
+    }
+}
+
+private struct MailboxView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var session: AppSession
+
+    var body: some View {
+        VStack(spacing: 0) {
+            mailboxHeader
+
+            if session.mailboxMessages.isEmpty {
+                Spacer()
+                EmptyStateView(
+                    systemImage: "envelope.open",
+                    title: "Your mailbox is empty",
+                    message: "Updates about your submitted pop-ups will appear here."
+                )
+                .padding(.horizontal, 24)
+                Spacer()
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(session.mailboxMessages) { message in
+                            Button {
+                                session.markMailboxMessageRead(message)
+                            } label: {
+                                MailboxMessageCard(message: message)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint(message.isRead ? "Message read" : "Marks this message as read")
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 18)
+                    .padding(.bottom, 110)
+                }
+                .scrollIndicators(.hidden)
+                .refreshable {
+                    await session.refreshMailbox()
+                }
+            }
+        }
+        .background(PopioTheme.background.ignoresSafeArea())
+        .navigationTitle("")
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
+        .task {
+            await session.refreshMailbox()
+        }
+    }
+
+    private var mailboxHeader: some View {
+        HStack(spacing: 12) {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(PopioFont.custom(size: 16, weight: .semibold))
+                    .foregroundStyle(ProfilePalette.ink)
+                    .frame(width: 44, height: 44)
+                    .background(Color.white, in: Circle())
+                    .overlay {
+                        Circle().stroke(ProfilePalette.line, lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back to menu")
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Mailbox")
+                    .font(PopioFont.custom(size: 21, weight: .semibold))
+                    .foregroundStyle(ProfilePalette.ink)
+
+                Text(session.unreadMailboxCount == 0 ? "You're all caught up" : "\(session.unreadMailboxCount) unread")
+                    .font(PopioFont.custom(size: 11.5, weight: .medium))
+                    .foregroundStyle(ProfilePalette.body)
+            }
+
+            Spacer()
+
+            Image(systemName: "envelope.fill")
+                .font(PopioFont.custom(size: 17, weight: .semibold))
+                .foregroundStyle(PopioTheme.gold)
+                .frame(width: 40, height: 40)
+                .background(PopioTheme.gold.opacity(0.12), in: Circle())
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+        .background(Color.white)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(ProfilePalette.line).frame(height: 1)
+        }
+    }
+}
+
+private struct MailboxMessageCard: View {
+    let message: MailboxMessage
+
+    private var tint: Color {
+        message.type == .eventApproved ? PopioTheme.accent : PopioTheme.coral
+    }
+
+    private var title: String {
+        message.type == .eventApproved ? "Pop-up approved" : "Changes requested"
+    }
+
+    private var systemImage: String {
+        message.type == .eventApproved ? "checkmark.seal.fill" : "exclamationmark.bubble.fill"
     }
 
     var body: some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(PopioFont.custom(size: 15, weight: .semibold))
-                .frame(maxWidth: .infinity)
-                .frame(height: 52)
+        HStack(alignment: .top, spacing: 13) {
+            Image(systemName: systemImage)
+                .font(PopioFont.custom(size: 17, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 42, height: 42)
+                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 7) {
+                    Text(title)
+                        .font(PopioFont.custom(size: 14.5, weight: .semibold))
+                        .foregroundStyle(ProfilePalette.ink)
+
+                    if !message.isRead {
+                        Circle()
+                            .fill(PopioTheme.coral)
+                            .frame(width: 7, height: 7)
+                    }
+
+                    Spacer()
+
+                    Text(message.createdDate.formatted(date: .abbreviated, time: .omitted))
+                        .font(PopioFont.custom(size: 10.5, weight: .medium))
+                        .foregroundStyle(ProfilePalette.body)
+                }
+
+                Text(message.eventTitle)
+                    .font(PopioFont.custom(size: 13, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .lineLimit(2)
+
+                Text(message.message)
+                    .font(PopioFont.custom(size: 12.5, weight: .medium))
+                    .foregroundStyle(ProfilePalette.body)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if !message.isRead {
+                    Text("Tap to mark as read")
+                        .font(PopioFont.custom(size: 10.5, weight: .semibold))
+                        .foregroundStyle(tint)
+                }
+            }
         }
-        .foregroundStyle(style == .filled ? .white : tint)
-        .background(style == .filled ? tint : Color.clear, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(15)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(message.isRead ? Color.white : tint.opacity(0.055), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(style == .filled ? Color.white.opacity(0.36) : tint, lineWidth: 1.3)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(message.isRead ? ProfilePalette.line : tint.opacity(0.24), lineWidth: 1)
         }
-        .buttonStyle(.plain)
     }
 }
 
@@ -662,16 +960,29 @@ private enum ProfileSupportRequestType: String, Identifiable {
             return PopioTheme.accent
         }
     }
+
+    var submissionType: SupportSubmissionType {
+        switch self {
+        case .feedback:
+            return .feedback
+        case .bug:
+            return .bug
+        case .contact:
+            return .contact
+        }
+    }
 }
 
 private struct FeedbackFormSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var session: AppSession
     let type: ProfileSupportRequestType
     @State private var message = ""
     @State private var didSubmit = false
+    @State private var isSubmitting = false
+    @State private var submissionError: String?
 
     private let characterLimit = 500
-    private let adminEmail = "popioadmin@gmail.com"
 
     var body: some View {
         VStack(spacing: 14) {
@@ -730,14 +1041,30 @@ private struct FeedbackFormSheet: View {
                 }
             }
 
+            if let submissionError {
+                Label(submissionError, systemImage: "exclamationmark.triangle.fill")
+                    .font(PopioFont.custom(size: 12, weight: .semibold))
+                    .foregroundStyle(PopioTheme.coral)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             Button {
-                openSupportEmail()
-                didSubmit = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    dismiss()
+                Task {
+                    isSubmitting = true
+                    submissionError = nil
+                    defer { isSubmitting = false }
+
+                    do {
+                        try await session.submitSupportRequest(type: type.submissionType, message: message)
+                        didSubmit = true
+                        try? await Task.sleep(for: .milliseconds(600))
+                        dismiss()
+                    } catch {
+                        submissionError = error.localizedDescription
+                    }
                 }
             } label: {
-                Label("Submit", systemImage: "paperplane.fill")
+                Label(isSubmitting ? "Submitting..." : "Submit", systemImage: "paperplane.fill")
                     .font(PopioFont.custom(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -745,8 +1072,8 @@ private struct FeedbackFormSheet: View {
                     .background(type.tint, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
             .buttonStyle(.plain)
-            .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || didSubmit)
-            .opacity(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || didSubmit ? 0.55 : 1)
+            .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || didSubmit || isSubmitting)
+            .opacity(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || didSubmit || isSubmitting ? 0.55 : 1)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 14)
@@ -767,28 +1094,6 @@ private struct FeedbackFormSheet: View {
             guard newValue.count > characterLimit else { return }
             message = String(newValue.prefix(characterLimit))
         }
-    }
-
-    private func openSupportEmail() {
-        let body = """
-        Popio \(type.title)
-
-        Category: \(type.title)
-
-        Message:
-        \(message.trimmingCharacters(in: .whitespacesAndNewlines))
-        """
-
-        var components = URLComponents()
-        components.scheme = "mailto"
-        components.path = adminEmail
-        components.queryItems = [
-            URLQueryItem(name: "subject", value: "Popio \(type.title)"),
-            URLQueryItem(name: "body", value: body)
-        ]
-
-        guard let url = components.url else { return }
-        UIApplication.shared.open(url)
     }
 }
 
@@ -892,6 +1197,18 @@ private struct ProfileChatActivityRow: View {
                     .font(PopioFont.custom(size: 14, weight: .bold))
                     .foregroundStyle(ProfilePalette.ink)
                     .lineLimit(1)
+
+                if chat.event.isArchived {
+                    Text("Archived")
+                        .font(PopioFont.custom(size: 10, weight: .semibold))
+                        .foregroundStyle(ProfilePalette.body)
+                        .padding(.horizontal, 7)
+                        .frame(height: 20)
+                        .background(Color.white.opacity(0.78), in: Capsule())
+                        .overlay {
+                            Capsule().stroke(ProfilePalette.orange.opacity(0.28), lineWidth: 0.75)
+                        }
+                }
 
                 Spacer()
             }

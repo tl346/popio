@@ -26,11 +26,17 @@ protocol FriendServicing {
 }
 
 protocol EventServicing {
-    func fetchEvents(includePending: Bool) async throws -> [PopioEvent]
+    func fetchEvents(includePending: Bool, currentUserID: String?) async throws -> [PopioEvent]
     func createEvent(_ event: PopioEvent) async throws
-    func fetchContributions(includePending: Bool) async throws -> [EventContribution]
+    func updateEvent(_ event: PopioEvent) async throws
+    func deleteEvent(_ eventID: String) async throws
+    func fetchContributions(includePending: Bool, currentUserID: String?) async throws -> [EventContribution]
     func createContribution(_ contribution: EventContribution) async throws
-    func createReport(_ report: UserContentReport) async throws
+    func createReport(_ report: UserContentReport, emailSubject: String, emailBody: String) async throws
+    func createSupportSubmission(_ submission: SupportSubmission, emailSubject: String, emailBody: String) async throws
+    func fetchMailboxMessages(for userID: String) async throws -> [MailboxMessage]
+    func reviewEvent(_ event: PopioEvent, mailboxMessage: MailboxMessage) async throws
+    func markMailboxMessageRead(_ messageID: String) async throws
 }
 
 protocol ImageStorageServicing {

@@ -91,6 +91,10 @@ struct PopioEvent: Identifiable, Hashable {
     var hasMenuImage: Bool {
         menuImageData != nil || menuImageURL != nil
     }
+
+    var isArchived: Bool {
+        eventDate < Calendar.current.startOfDay(for: .now)
+    }
 }
 
 enum UserContentReportTargetType: String, CaseIterable, Identifiable {
@@ -118,6 +122,42 @@ struct UserContentReport: Identifiable, Hashable {
     let reason: String
     let details: String
     var status: UserContentReportStatus
+    let createdDate: Date
+}
+
+enum SupportSubmissionType: String, CaseIterable, Identifiable {
+    case feedback
+    case bug
+    case contact
+
+    var id: String { rawValue }
+}
+
+struct SupportSubmission: Identifiable, Hashable {
+    let id: String
+    let userID: String
+    let username: String
+    let userEmail: String
+    let type: SupportSubmissionType
+    let message: String
+    let createdDate: Date
+}
+
+enum MailboxMessageType: String, CaseIterable, Identifiable {
+    case eventApproved
+    case eventRejected
+
+    var id: String { rawValue }
+}
+
+struct MailboxMessage: Identifiable, Hashable {
+    let id: String
+    let recipientUserID: String
+    let eventID: String
+    let eventTitle: String
+    let type: MailboxMessageType
+    let message: String
+    var isRead: Bool
     let createdDate: Date
 }
 

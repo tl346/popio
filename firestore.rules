@@ -78,13 +78,17 @@ service cloud.firestore {
 
     match /eventContributions/{contributionId} {
       allow read: if resource.data.moderationStatus == "approved"
+        || resource.data.type == "Review"
         || (signedIn() && resource.data.createdByUserID == request.auth.uid)
         || isAdmin();
 
       allow create: if signedIn()
         && request.resource.data.id == contributionId
         && request.resource.data.createdByUserID == request.auth.uid
-        && request.resource.data.moderationStatus == "pending"
+        && ((request.resource.data.type == "Picture"
+              && request.resource.data.moderationStatus == "pending")
+          || (request.resource.data.type == "Review"
+              && request.resource.data.moderationStatus == "approved"))
         && !request.resource.data.keys().hasAny([
           "reviewedByUserID",
           "moderationComment"
@@ -131,6 +135,48 @@ service cloud.firestore {
         && request.resource.data.status == "open";
 
       allow update, delete: if isAdmin();
+    }
+
+    match /supportSubmissions/{submissionId} {
+      allow read, update, delete: if isAdmin();
+
+      allow create: if signedIn()
+        && request.resource.data.id == submissionId
+        && request.resource.data.userID == request.auth.uid
+        && request.resource.data.type in ["feedback", "bug", "contact"]
+        && request.resource.data.message is string
+        && request.resource.data.message.size() <= 500;
+    }
+
+    match /mailboxMessages/{messageId} {
+      allow read: if signedIn()
+        && (resource.data.recipientUserID == request.auth.uid || isAdmin());
+
+      allow create: if isAdmin()
+        && request.resource.data.id == messageId
+        && request.resource.data.type in ["eventApproved", "eventRejected"]
+        && request.resource.data.isRead == false;
+
+      allow update: if isAdmin()
+        || (signedIn()
+          && resource.data.recipientUserID == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["isRead"])
+          && request.resource.data.isRead == true);
+
+      allow delete: if signedIn()
+        && (resource.data.recipientUserID == request.auth.uid || isAdmin());
+    }
+
+    match /mail/{mailId} {
+      allow read, update, delete: if isAdmin();
+
+      allow create: if signedIn()
+        && request.resource.data.to == ["popioadmin@gmail.com"]
+        && request.resource.data.message.subject is string
+        && request.resource.data.message.text is string
+        && request.resource.data.message.subject.size() <= 120
+        && request.resource.data.message.text.size() <= 4000
+        && request.resource.data.source == "popio-ios";
     }
   }
 }

@@ -8,14 +8,26 @@ struct FirebaseEventService: EventServicing {
         self.database = database
     }
 
-    func fetchEvents(includePending: Bool) async throws -> [PopioEvent] {
-        let query: Query = includePending
-            ? database.collection("events")
-            : database.collection("events")
+    func fetchEvents(includePending: Bool, currentUserID: String?) async throws -> [PopioEvent] {
+        let documents: [QueryDocumentSnapshot]
+        if includePending {
+            documents = try await database.collection("events").getDocuments().documents
+        } else if let currentUserID {
+            async let approvedSnapshot = database.collection("events")
                 .whereField("moderationStatus", isEqualTo: EventModerationStatus.approved.rawValue)
-        let snapshot = try await query.getDocuments()
+                .getDocuments()
+            async let ownedSnapshot = database.collection("events")
+                .whereField("createdByUserID", isEqualTo: currentUserID)
+                .getDocuments()
+            let (approved, owned) = try await (approvedSnapshot, ownedSnapshot)
+            documents = uniqueDocuments(approved.documents + owned.documents)
+        } else {
+            documents = try await database.collection("events")
+                .whereField("moderationStatus", isEqualTo: EventModerationStatus.approved.rawValue)
+                .getDocuments().documents
+        }
 
-        return snapshot.documents.compactMap { document in
+        return documents.compactMap { document in
             try? event(from: document)
         }
         .sorted { $0.eventDate < $1.eventDate }
@@ -25,14 +37,43 @@ struct FirebaseEventService: EventServicing {
         try await database.collection("events").document(event.id).setData(data(from: event), merge: true)
     }
 
-    func fetchContributions(includePending: Bool) async throws -> [EventContribution] {
-        let query: Query = includePending
-            ? database.collection("eventContributions")
-            : database.collection("eventContributions")
-                .whereField("moderationStatus", isEqualTo: EventModerationStatus.approved.rawValue)
-        let snapshot = try await query.getDocuments()
+    func updateEvent(_ event: PopioEvent) async throws {
+        try await database.collection("events").document(event.id).setData(data(from: event), merge: false)
+    }
 
-        return snapshot.documents.compactMap { document in
+    func deleteEvent(_ eventID: String) async throws {
+        let contributions = try await database.collection("eventContributions")
+            .whereField("eventID", isEqualTo: eventID)
+            .getDocuments()
+        let batch = database.batch()
+        contributions.documents.forEach { batch.deleteDocument($0.reference) }
+        batch.deleteDocument(database.collection("events").document(eventID))
+        try await batch.commit()
+    }
+
+    func fetchContributions(includePending: Bool, currentUserID: String?) async throws -> [EventContribution] {
+        let documents: [QueryDocumentSnapshot]
+        if includePending {
+            documents = try await database.collection("eventContributions").getDocuments().documents
+        } else if let currentUserID {
+            async let approvedSnapshot = database.collection("eventContributions")
+                .whereField("moderationStatus", isEqualTo: EventModerationStatus.approved.rawValue)
+                .getDocuments()
+            async let ownedSnapshot = database.collection("eventContributions")
+                .whereField("createdByUserID", isEqualTo: currentUserID)
+                .getDocuments()
+            async let chatSnapshot = database.collection("eventContributions")
+                .whereField("type", isEqualTo: EventContributionType.review.rawValue)
+                .getDocuments()
+            let (approved, owned, chats) = try await (approvedSnapshot, ownedSnapshot, chatSnapshot)
+            documents = uniqueDocuments(approved.documents + owned.documents + chats.documents)
+        } else {
+            documents = try await database.collection("eventContributions")
+                .whereField("moderationStatus", isEqualTo: EventModerationStatus.approved.rawValue)
+                .getDocuments().documents
+        }
+
+        return documents.compactMap { document in
             try? contribution(from: document)
         }
         .sorted { $0.createdDate > $1.createdDate }
@@ -42,8 +83,76 @@ struct FirebaseEventService: EventServicing {
         try await database.collection("eventContributions").document(contribution.id).setData(data(from: contribution), merge: true)
     }
 
-    func createReport(_ report: UserContentReport) async throws {
-        try await database.collection("contentReports").document(report.id).setData(data(from: report), merge: true)
+    func createReport(_ report: UserContentReport, emailSubject: String, emailBody: String) async throws {
+        let batch = database.batch()
+        batch.setData(
+            data(from: report),
+            forDocument: database.collection("contentReports").document(report.id),
+            merge: false
+        )
+        queueAdminEmail(subject: emailSubject, body: emailBody, in: batch)
+        try await batch.commit()
+    }
+
+    func createSupportSubmission(_ submission: SupportSubmission, emailSubject: String, emailBody: String) async throws {
+        let batch = database.batch()
+        batch.setData(
+            data(from: submission),
+            forDocument: database.collection("supportSubmissions").document(submission.id),
+            merge: false
+        )
+        queueAdminEmail(subject: emailSubject, body: emailBody, in: batch)
+        try await batch.commit()
+    }
+
+    private func queueAdminEmail(subject: String, body: String, in batch: WriteBatch) {
+        let emailID = UUID().uuidString
+        let data: [String: Any] = [
+            "to": ["popioadmin@gmail.com"],
+            "message": [
+                "subject": subject,
+                "text": body
+            ],
+            "source": "popio-ios",
+            "createdDate": Timestamp(date: .now)
+        ]
+        batch.setData(data, forDocument: database.collection("mail").document(emailID), merge: false)
+    }
+
+    func fetchMailboxMessages(for userID: String) async throws -> [MailboxMessage] {
+        let snapshot = try await database.collection("mailboxMessages")
+            .whereField("recipientUserID", isEqualTo: userID)
+            .getDocuments()
+
+        return snapshot.documents.compactMap { document in
+            try? mailboxMessage(from: document)
+        }
+        .sorted { $0.createdDate > $1.createdDate }
+    }
+
+    func reviewEvent(_ event: PopioEvent, mailboxMessage: MailboxMessage) async throws {
+        let batch = database.batch()
+        batch.setData(
+            data(from: event),
+            forDocument: database.collection("events").document(event.id),
+            merge: true
+        )
+        batch.setData(
+            data(from: mailboxMessage),
+            forDocument: database.collection("mailboxMessages").document(mailboxMessage.id),
+            merge: false
+        )
+        try await batch.commit()
+    }
+
+    func markMailboxMessageRead(_ messageID: String) async throws {
+        try await database.collection("mailboxMessages")
+            .document(messageID)
+            .updateData(["isRead": true])
+    }
+
+    private func uniqueDocuments(_ documents: [QueryDocumentSnapshot]) -> [QueryDocumentSnapshot] {
+        Array(Dictionary(documents.map { ($0.documentID, $0) }, uniquingKeysWith: { first, _ in first }).values)
     }
 
     private func event(from document: QueryDocumentSnapshot) throws -> PopioEvent {
@@ -278,15 +387,69 @@ struct FirebaseEventService: EventServicing {
             "createdDate": Timestamp(date: report.createdDate)
         ]
     }
+
+    private func data(from submission: SupportSubmission) -> [String: Any] {
+        [
+            "id": submission.id,
+            "userID": submission.userID,
+            "username": submission.username,
+            "userEmail": submission.userEmail,
+            "type": submission.type.rawValue,
+            "message": submission.message,
+            "createdDate": Timestamp(date: submission.createdDate)
+        ]
+    }
+
+    private func mailboxMessage(from document: QueryDocumentSnapshot) throws -> MailboxMessage {
+        let data = document.data()
+
+        guard let recipientUserID = data["recipientUserID"] as? String,
+              let eventID = data["eventID"] as? String,
+              let eventTitle = data["eventTitle"] as? String,
+              let typeValue = data["type"] as? String,
+              let type = MailboxMessageType(rawValue: typeValue),
+              let message = data["message"] as? String,
+              let isRead = data["isRead"] as? Bool,
+              let createdDate = (data["createdDate"] as? Timestamp)?.dateValue() else {
+            throw FirebaseEventServiceError.invalidMailboxMessage
+        }
+
+        return MailboxMessage(
+            id: document.documentID,
+            recipientUserID: recipientUserID,
+            eventID: eventID,
+            eventTitle: eventTitle,
+            type: type,
+            message: message,
+            isRead: isRead,
+            createdDate: createdDate
+        )
+    }
+
+    private func data(from message: MailboxMessage) -> [String: Any] {
+        [
+            "id": message.id,
+            "recipientUserID": message.recipientUserID,
+            "eventID": message.eventID,
+            "eventTitle": message.eventTitle,
+            "type": message.type.rawValue,
+            "message": message.message,
+            "isRead": message.isRead,
+            "createdDate": Timestamp(date: message.createdDate)
+        ]
+    }
 }
 
 enum FirebaseEventServiceError: LocalizedError {
     case invalidEvent
+    case invalidMailboxMessage
 
     var errorDescription: String? {
         switch self {
         case .invalidEvent:
             return "A saved pop-up could not be loaded."
+        case .invalidMailboxMessage:
+            return "A mailbox message could not be loaded."
         }
     }
 }

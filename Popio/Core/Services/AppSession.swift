@@ -5,11 +5,14 @@ import UIKit
 
 @MainActor
 final class AppSession: ObservableObject {
+    static let adminEmail = "popioadmin@gmail.com"
+
     @Published private(set) var currentUser: PopioUser?
     @Published private(set) var users: [PopioUser]
     @Published private(set) var friendRequests: [FriendRequest]
     @Published private(set) var events: [PopioEvent]
     @Published private(set) var eventContributions: [EventContribution]
+    @Published private(set) var mailboxMessages: [MailboxMessage]
 
     private var authenticationService: AuthenticationServicing? {
         FirebaseBootstrap.isConfigured ? FirebaseAuthenticationService() : nil
@@ -92,6 +95,7 @@ final class AppSession: ObservableObject {
                 createdDate: .now
             )
         ]
+        mailboxMessages = []
     }
 }
 
@@ -107,6 +111,7 @@ extension AppSession {
             try? await loadPersistedFriendRequests()
             try? await loadPersistedEvents()
             try? await loadPersistedContributions()
+            try? await loadMailboxMessages()
         } catch {
             currentUser = nil
         }
@@ -117,6 +122,11 @@ extension AppSession {
         try? await loadPersistedFriendRequests()
         try? await loadPersistedEvents()
         try? await loadPersistedContributions()
+        try? await loadMailboxMessages()
+    }
+
+    func refreshMailbox() async {
+        try? await loadMailboxMessages()
     }
 
     func register(username: String, email: String, password: String, firstName: String, lastName: String) async throws {
@@ -133,6 +143,7 @@ extension AppSession {
             try? await loadPersistedUsers()
             try? await loadPersistedFriendRequests()
             try? await loadPersistedEvents()
+            try? await loadMailboxMessages()
             return
         }
 
@@ -172,6 +183,7 @@ extension AppSession {
             try? await loadPersistedUsers()
             try? await loadPersistedFriendRequests()
             try? await loadPersistedEvents()
+            try? await loadMailboxMessages()
             return
         }
 
@@ -196,6 +208,7 @@ extension AppSession {
         try? await loadPersistedUsers()
         try? await loadPersistedFriendRequests()
         try? await loadPersistedEvents()
+        try? await loadMailboxMessages()
     }
 
     func signInWithApple(idToken: String, nonce: String, fullName: PersonNameComponents?, email: String?) async throws {
@@ -214,6 +227,7 @@ extension AppSession {
         try? await loadPersistedUsers()
         try? await loadPersistedFriendRequests()
         try? await loadPersistedEvents()
+        try? await loadMailboxMessages()
     }
 
     func logout() async throws {
@@ -325,7 +339,10 @@ extension AppSession {
 
     private func loadPersistedEvents() async throws {
         guard let eventService else { return }
-        let persistedEvents = try await eventService.fetchEvents(includePending: currentUser?.isAdmin == true)
+        let persistedEvents = try await eventService.fetchEvents(
+            includePending: currentUser?.isAdmin == true,
+            currentUserID: currentUser?.id
+        )
         let sampleEventsByID = Dictionary(uniqueKeysWithValues: PopioEvent.samples.map { ($0.id, $0) })
         let persistedIDs = Set(persistedEvents.map(\.id))
         let localOnlySamples = sampleEventsByID.values.filter { !persistedIDs.contains($0.id) }
@@ -334,7 +351,10 @@ extension AppSession {
 
     private func loadPersistedContributions() async throws {
         guard let eventService else { return }
-        let persistedContributions = try await eventService.fetchContributions(includePending: currentUser?.isAdmin == true)
+        let persistedContributions = try await eventService.fetchContributions(
+            includePending: currentUser?.isAdmin == true,
+            currentUserID: currentUser?.id
+        )
         let sampleContributionsByID = Dictionary(uniqueKeysWithValues: eventContributions.map { ($0.id, $0) })
         let persistedIDs = Set(persistedContributions.map(\.id))
         let localOnlySamples = sampleContributionsByID.values.filter { !persistedIDs.contains($0.id) }
@@ -350,6 +370,11 @@ extension AppSession {
     private func loadPersistedFriendRequests() async throws {
         guard let currentUser, let friendService else { return }
         friendRequests = try await friendService.fetchFriendRequests(for: currentUser.id)
+    }
+
+    private func loadMailboxMessages() async throws {
+        guard let currentUser, let eventService else { return }
+        mailboxMessages = try await eventService.fetchMailboxMessages(for: currentUser.id)
     }
 
     private static func displayName(firstName: String, lastName: String, fallback: String) -> String {
@@ -375,6 +400,9 @@ extension AppSession {
 enum SessionError: LocalizedError {
     case invalidLogin
     case displayNameTaken
+    case rejectionCommentRequired
+    case notAuthenticated
+    case serviceUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -382,6 +410,12 @@ enum SessionError: LocalizedError {
             return "No account was found for that email or username."
         case .displayNameTaken:
             return "That display name is already taken."
+        case .rejectionCommentRequired:
+            return "Add a short explanation before rejecting this pop-up."
+        case .notAuthenticated:
+            return "Log in again before submitting this request."
+        case .serviceUnavailable:
+            return "Support requests are unavailable until Firebase is configured."
         }
     }
 }
@@ -549,7 +583,17 @@ extension AppSession {
 
     var approvedEvents: [PopioEvent] {
         events
-            .filter { $0.moderationStatus == .approved && !isBlocked($0.createdByUserID) }
+            .filter { $0.moderationStatus == .approved && !$0.isArchived && !isBlocked($0.createdByUserID) }
+            .sorted { $0.eventDate < $1.eventDate }
+    }
+
+    var discoveryEvents: [PopioEvent] {
+        events
+            .filter { event in
+                guard !event.isArchived, !isBlocked(event.createdByUserID) else { return false }
+                return event.moderationStatus == .approved
+                    || (event.moderationStatus == .pending && event.createdByUserID == currentUser?.id)
+            }
             .sorted { $0.eventDate < $1.eventDate }
     }
 
@@ -755,21 +799,94 @@ extension AppSession {
         events.insert(event, at: 0)
     }
 
-    func reviewEvent(_ event: PopioEvent, status: EventModerationStatus, comment: String) {
+    func reviewEvent(_ event: PopioEvent, status: EventModerationStatus, comment: String) async throws {
         guard currentUser?.isAdmin == true else { return }
         guard status == .approved || status == .rejected else { return }
         guard let index = events.firstIndex(where: { $0.id == event.id }) else { return }
 
+        let trimmedComment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
+        if status == .rejected, trimmedComment.isEmpty {
+            throw SessionError.rejectionCommentRequired
+        }
+
         var updatedEvents = events
         updatedEvents[index].moderationStatus = status
         updatedEvents[index].isApproved = status == .approved
-        updatedEvents[index].moderationComment = comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : comment
+        updatedEvents[index].moderationComment = trimmedComment.isEmpty ? nil : trimmedComment
         updatedEvents[index].reviewedByUserID = currentUser?.id
+
+        let mailboxMessage = MailboxMessage(
+            id: UUID().uuidString,
+            recipientUserID: event.createdByUserID,
+            eventID: event.id,
+            eventTitle: event.title,
+            type: status == .approved ? .eventApproved : .eventRejected,
+            message: status == .approved
+                ? "Your pop-up has been approved and is now visible in the community feed."
+                : trimmedComment,
+            isRead: false,
+            createdDate: .now
+        )
+
+        if let eventService {
+            try await eventService.reviewEvent(updatedEvents[index], mailboxMessage: mailboxMessage)
+        }
+
         events = updatedEvents
+
+        if mailboxMessage.recipientUserID == currentUser?.id {
+            mailboxMessages.insert(mailboxMessage, at: 0)
+        }
+    }
+
+    func updateEvent(_ event: PopioEvent) async throws {
+        guard currentUser?.isAdmin == true else { return }
+        guard let index = events.firstIndex(where: { $0.id == event.id }) else { return }
+
+        if let eventService {
+            try await eventService.updateEvent(event)
+        }
+
+        events[index] = event
+        events.sort { $0.eventDate < $1.eventDate }
+    }
+
+    func deleteEvent(_ event: PopioEvent) async throws {
+        guard currentUser?.isAdmin == true else { return }
+        let contributionIDs = eventContributions
+            .filter { $0.eventID == event.id }
+            .map(\.id)
+
+        if let eventService {
+            try await eventService.deleteEvent(event.id)
+        }
+
+        if FirebaseBootstrap.isConfigured {
+            let storage = FirebaseImageStorageService()
+            try? await storage.deleteEventImages(eventID: event.id)
+            for contributionID in contributionIDs {
+                try? await storage.deleteContributionImage(contributionID: contributionID)
+            }
+        }
+
+        events.removeAll { $0.id == event.id }
+        eventContributions.removeAll { $0.eventID == event.id }
+    }
+
+    var unreadMailboxCount: Int {
+        mailboxMessages.filter { !$0.isRead }.count
+    }
+
+    func markMailboxMessageRead(_ message: MailboxMessage) {
+        guard message.recipientUserID == currentUser?.id,
+              let index = mailboxMessages.firstIndex(where: { $0.id == message.id }),
+              !mailboxMessages[index].isRead else { return }
+
+        mailboxMessages[index].isRead = true
 
         if let eventService {
             Task {
-                try? await eventService.createEvent(updatedEvents[index])
+                try? await eventService.markMailboxMessageRead(message.id)
             }
         }
     }
@@ -779,7 +896,8 @@ extension AppSession {
             .filter {
                 $0.eventID == event.id
                     && $0.type == type
-                    && $0.moderationStatus == .approved
+                    && ($0.moderationStatus == .approved
+                        || (type == .review && $0.moderationStatus == .pending))
                     && !isBlocked($0.createdByUserID)
             }
             .sorted { $0.createdDate > $1.createdDate }
@@ -791,8 +909,8 @@ extension AppSession {
         reportedUserID: String,
         reason: String,
         details: String = ""
-    ) {
-        guard let currentUser else { return }
+    ) async throws {
+        guard let currentUser else { throw SessionError.notAuthenticated }
         guard currentUser.id != reportedUserID else { return }
 
         let report = UserContentReport(
@@ -807,11 +925,83 @@ extension AppSession {
             createdDate: .now
         )
 
-        if let eventService {
-            Task {
-                try? await eventService.createReport(report)
-            }
+        guard let eventService else { throw SessionError.serviceUnavailable }
+        try await eventService.createReport(
+            report,
+            emailSubject: "Popio Report - \(targetType.rawValue)",
+            emailBody: adminEmailBody(
+                title: "Popio UGC Report",
+                fields: [
+                    ("Type", targetType.rawValue),
+                    ("Target ID", targetID),
+                    ("Reported User ID", reportedUserID),
+                    ("Reporter", "@\(currentUser.username)"),
+                    ("Reporter ID", currentUser.id),
+                    ("Reporter Email", currentUser.email),
+                    ("Reason", report.reason),
+                    ("Details", report.details.isEmpty ? "None provided" : report.details)
+                ]
+            )
+        )
+    }
+
+    func submitSupportRequest(type: SupportSubmissionType, message: String) async throws {
+        guard let currentUser else { throw SessionError.notAuthenticated }
+
+        let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedMessage.isEmpty else { return }
+
+        let submission = SupportSubmission(
+            id: UUID().uuidString,
+            userID: currentUser.id,
+            username: currentUser.username,
+            userEmail: currentUser.email,
+            type: type,
+            message: trimmedMessage,
+            createdDate: .now
+        )
+
+        guard let eventService else { throw SessionError.serviceUnavailable }
+        try await eventService.createSupportSubmission(
+            submission,
+            emailSubject: "Popio \(supportTitle(for: type))",
+            emailBody: adminEmailBody(
+                title: "Popio \(supportTitle(for: type))",
+                fields: [
+                    ("Category", supportTitle(for: type)),
+                    ("User", "@\(currentUser.username)"),
+                    ("User ID", currentUser.id),
+                    ("Email", currentUser.email),
+                    ("Message", trimmedMessage)
+                ]
+            )
+        )
+    }
+
+    private func supportTitle(for type: SupportSubmissionType) -> String {
+        switch type {
+        case .feedback:
+            return "Submit Feedback"
+        case .bug:
+            return "Report Bug"
+        case .contact:
+            return "Contact Support"
         }
+    }
+
+    private func adminEmailBody(title: String, fields: [(String, String)]) -> String {
+        let fieldText = fields
+            .map { "\($0.0): \($0.1)" }
+            .joined(separator: "\n")
+
+        return """
+        \(title)
+
+        \(fieldText)
+
+        Sent to: \(Self.adminEmail)
+        Created: \(Date().formatted(date: .abbreviated, time: .shortened))
+        """
     }
 
     func submitContribution(
@@ -832,7 +1022,7 @@ extension AppSession {
             text: text.trimmingCharacters(in: .whitespacesAndNewlines),
             imageData: imageData,
             imageURL: nil,
-            moderationStatus: .pending,
+            moderationStatus: type == .review ? .approved : .pending,
             moderationComment: nil,
             reviewedByUserID: nil,
             likedUserIDs: [],
