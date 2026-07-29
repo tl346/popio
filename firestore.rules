@@ -16,6 +16,11 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     }
 
+    function isAdminUser(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId))
+        && get(/databases/$(database)/documents/users/$(userId)).data.isAdmin == true;
+    }
+
     function userSafeFieldsOnlyChanged() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
         "id",
@@ -154,7 +159,18 @@ service cloud.firestore {
 
       allow create: if isAdmin()
         && request.resource.data.id == messageId
-        && request.resource.data.type in ["eventApproved", "eventRejected"]
+        && request.resource.data.type in [
+          "eventApproved",
+          "eventRejected",
+          "photoApproved",
+          "photoRejected"
+        ]
+        && request.resource.data.isRead == false;
+
+      allow create: if signedIn()
+        && request.resource.data.id == messageId
+        && request.resource.data.type == "photoSubmitted"
+        && isAdminUser(request.resource.data.recipientUserID)
         && request.resource.data.isRead == false;
 
       allow update: if isAdmin()

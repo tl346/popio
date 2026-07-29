@@ -404,19 +404,77 @@ private struct AppleAuthButton: View {
     let isDisabled: Bool
     let onRequest: (ASAuthorizationAppleIDRequest) -> Void
     let onCompletion: (Result<ASAuthorization, Error>) -> Void
+    @State private var authorizationCoordinator = AppleAuthorizationCoordinator()
 
     var body: some View {
-        ZStack {
+        Button {
+            authorizationCoordinator.start(
+                onRequest: onRequest,
+                onCompletion: onCompletion
+            )
+        } label: {
             SocialButtonLabel(systemImage: "apple.logo", title: "Apple")
-
-            SignInWithAppleButton(mode, onRequest: onRequest, onCompletion: onCompletion)
-                .signInWithAppleButtonStyle(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .opacity(0.02)
+                .opacity(isDisabled ? 0.72 : 1)
         }
-        .frame(maxWidth: .infinity)
+        .buttonStyle(.plain)
         .disabled(isDisabled)
+        .accessibilityLabel("Apple")
+    }
+}
+
+@MainActor
+private final class AppleAuthorizationCoordinator: NSObject,
+    ASAuthorizationControllerDelegate,
+    ASAuthorizationControllerPresentationContextProviding {
+    private var authorizationController: ASAuthorizationController?
+    private var completion: ((Result<ASAuthorization, Error>) -> Void)?
+
+    func start(
+        onRequest: (ASAuthorizationAppleIDRequest) -> Void,
+        onCompletion: @escaping (Result<ASAuthorization, Error>) -> Void
+    ) {
+        let request = ASAuthorizationAppleIDProvider().createRequest()
+        onRequest(request)
+
+        completion = onCompletion
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = self
+        controller.presentationContextProvider = self
+        authorizationController = controller
+        controller.performRequests()
+    }
+
+    func authorizationController(
+        controller: ASAuthorizationController,
+        didCompleteWithAuthorization authorization: ASAuthorization
+    ) {
+        completion?(.success(authorization))
+        finishAuthorization()
+    }
+
+    func authorizationController(
+        controller: ASAuthorizationController,
+        didCompleteWithError error: Error
+    ) {
+        completion?(.failure(error))
+        finishAuthorization()
+    }
+
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        let activeScene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+
+        if let keyWindow = activeScene?.windows.first(where: \.isKeyWindow) {
+            return keyWindow
+        }
+
+        return activeScene?.windows.first ?? UIWindow(frame: .zero)
+    }
+
+    private func finishAuthorization() {
+        completion = nil
+        authorizationController = nil
     }
 }
 

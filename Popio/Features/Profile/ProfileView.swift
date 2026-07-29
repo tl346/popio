@@ -643,11 +643,6 @@ private struct ProfileMenuPage: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Back to profile")
 
-            Image("appicontransparent")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 38, height: 38)
-
             VStack(alignment: .leading, spacing: 1) {
                 Text("Menu")
                     .font(PopioFont.custom(size: 21, weight: .semibold))
@@ -689,11 +684,28 @@ private struct ProfileMenuRow: View {
 
     var body: some View {
         HStack(spacing: 13) {
-            Image(systemName: systemImage)
-                .font(PopioFont.custom(size: 16, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 42, height: 42)
-                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: systemImage)
+                    .font(PopioFont.custom(size: 16, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 42, height: 42)
+                    .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                if badgeCount > 0 {
+                    Text(badgeText)
+                        .font(PopioFont.custom(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                        .monospacedDigit()
+                        .padding(.horizontal, 5)
+                        .frame(height: 18)
+                        .background(PopioTheme.coral, in: Capsule())
+                        .overlay {
+                            Capsule().stroke(Color.white, lineWidth: 1.5)
+                        }
+                        .offset(x: 7, y: -6)
+                        .accessibilityHidden(true)
+                }
+            }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
@@ -708,14 +720,6 @@ private struct ProfileMenuRow: View {
 
             Spacer(minLength: 8)
 
-            if badgeCount > 0 {
-                Text("\(badgeCount)")
-                    .font(PopioFont.custom(size: 11, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(minWidth: 22, minHeight: 22)
-                    .background(PopioTheme.coral, in: Capsule())
-            }
-
             Image(systemName: "chevron.right")
                 .font(PopioFont.custom(size: 12, weight: .semibold))
                 .foregroundStyle(ProfilePalette.body.opacity(0.72))
@@ -723,6 +727,10 @@ private struct ProfileMenuRow: View {
         .padding(.horizontal, 14)
         .frame(minHeight: 68)
         .contentShape(Rectangle())
+    }
+
+    private var badgeText: String {
+        badgeCount > 99 ? "99+" : "\(badgeCount)"
     }
 }
 
@@ -833,15 +841,40 @@ private struct MailboxMessageCard: View {
     let message: MailboxMessage
 
     private var tint: Color {
-        message.type == .eventApproved ? PopioTheme.accent : PopioTheme.coral
+        switch message.type {
+        case .eventApproved, .photoApproved:
+            return PopioTheme.accent
+        case .eventRejected, .photoRejected:
+            return PopioTheme.coral
+        case .photoSubmitted:
+            return PopioTheme.gold
+        }
     }
 
     private var title: String {
-        message.type == .eventApproved ? "Pop-up approved" : "Changes requested"
+        switch message.type {
+        case .eventApproved:
+            return "Pop-up approved"
+        case .eventRejected:
+            return "Changes requested"
+        case .photoSubmitted:
+            return "Photo needs approval"
+        case .photoApproved:
+            return "Photo approved"
+        case .photoRejected:
+            return "Photo rejected"
+        }
     }
 
     private var systemImage: String {
-        message.type == .eventApproved ? "checkmark.seal.fill" : "exclamationmark.bubble.fill"
+        switch message.type {
+        case .eventApproved, .photoApproved:
+            return "checkmark.seal.fill"
+        case .eventRejected, .photoRejected:
+            return "exclamationmark.bubble.fill"
+        case .photoSubmitted:
+            return "photo.badge.exclamationmark"
+        }
     }
 
     var body: some View {

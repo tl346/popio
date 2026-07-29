@@ -146,6 +146,9 @@ struct SupportSubmission: Identifiable, Hashable {
 enum MailboxMessageType: String, CaseIterable, Identifiable {
     case eventApproved
     case eventRejected
+    case photoSubmitted
+    case photoApproved
+    case photoRejected
 
     var id: String { rawValue }
 }

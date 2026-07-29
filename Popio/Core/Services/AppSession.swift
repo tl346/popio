@@ -1004,6 +1004,38 @@ extension AppSession {
         """
     }
 
+    private func adminPhotoSubmissionMessages(for contribution: EventContribution, event: PopioEvent) -> [MailboxMessage] {
+        users
+            .filter { $0.isAdmin && $0.id != contribution.createdByUserID }
+            .map { admin in
+                MailboxMessage(
+                    id: UUID().uuidString,
+                    recipientUserID: admin.id,
+                    eventID: event.id,
+                    eventTitle: event.title,
+                    type: .photoSubmitted,
+                    message: "@\(contribution.creatorUsername) submitted a photo for approval.",
+                    isRead: false,
+                    createdDate: .now
+                )
+            }
+    }
+
+    private func photoReviewMessage(
+        for contribution: EventContribution,
+        status: EventModerationStatus,
+        comment: String
+    ) -> String {
+        switch status {
+        case .approved:
+            return "Your photo has been approved and is now visible on the pop-up page."
+        case .rejected:
+            return comment.isEmpty ? "Your photo was not approved." : comment
+        case .pending:
+            return "Your photo is waiting for approval."
+        }
+    }
+
     func submitContribution(
         for event: PopioEvent,
         type: EventContributionType,
@@ -1047,6 +1079,15 @@ extension AppSession {
                 }
 
                 try? await eventService.createContribution(persistedContribution)
+
+                if type == .picture, persistedContribution.moderationStatus == .pending {
+                    let messages = adminPhotoSubmissionMessages(for: persistedContribution, event: event)
+                    try? await eventService.createMailboxMessages(messages)
+
+                    for message in messages where message.recipientUserID == currentUser.id {
+                        mailboxMessages.insert(message, at: 0)
+                    }
+                }
             }
         }
     }
@@ -1057,15 +1098,32 @@ extension AppSession {
         guard let index = eventContributions.firstIndex(where: { $0.id == contribution.id }) else { return }
 
         var updatedContributions = eventContributions
+        let trimmedComment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
         updatedContributions[index].moderationStatus = status
-        updatedContributions[index].moderationComment = comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : comment
+        updatedContributions[index].moderationComment = trimmedComment.isEmpty ? nil : trimmedComment
         updatedContributions[index].reviewedByUserID = currentUser?.id
+        let reviewedContribution = updatedContributions[index]
+        let event = events.first { $0.id == reviewedContribution.eventID }
+        let mailboxMessage = MailboxMessage(
+            id: UUID().uuidString,
+            recipientUserID: reviewedContribution.createdByUserID,
+            eventID: reviewedContribution.eventID,
+            eventTitle: event?.title ?? "Pop-up",
+            type: status == .approved ? .photoApproved : .photoRejected,
+            message: photoReviewMessage(for: reviewedContribution, status: status, comment: trimmedComment),
+            isRead: false,
+            createdDate: .now
+        )
         eventContributions = updatedContributions
 
         if let eventService {
             Task {
-                try? await eventService.createContribution(updatedContributions[index])
+                try? await eventService.reviewContribution(reviewedContribution, mailboxMessage: mailboxMessage)
             }
+        }
+
+        if mailboxMessage.recipientUserID == currentUser?.id {
+            mailboxMessages.insert(mailboxMessage, at: 0)
         }
     }
 

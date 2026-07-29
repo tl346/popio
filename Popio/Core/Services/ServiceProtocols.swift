@@ -35,7 +35,9 @@ protocol EventServicing {
     func createReport(_ report: UserContentReport, emailSubject: String, emailBody: String) async throws
     func createSupportSubmission(_ submission: SupportSubmission, emailSubject: String, emailBody: String) async throws
     func fetchMailboxMessages(for userID: String) async throws -> [MailboxMessage]
+    func createMailboxMessages(_ messages: [MailboxMessage]) async throws
     func reviewEvent(_ event: PopioEvent, mailboxMessage: MailboxMessage) async throws
+    func reviewContribution(_ contribution: EventContribution, mailboxMessage: MailboxMessage) async throws
     func markMailboxMessageRead(_ messageID: String) async throws
 }
 

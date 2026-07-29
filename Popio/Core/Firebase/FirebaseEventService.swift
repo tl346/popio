@@ -130,11 +130,40 @@ struct FirebaseEventService: EventServicing {
         .sorted { $0.createdDate > $1.createdDate }
     }
 
+    func createMailboxMessages(_ messages: [MailboxMessage]) async throws {
+        guard !messages.isEmpty else { return }
+
+        let batch = database.batch()
+        for message in messages {
+            batch.setData(
+                data(from: message),
+                forDocument: database.collection("mailboxMessages").document(message.id),
+                merge: false
+            )
+        }
+        try await batch.commit()
+    }
+
     func reviewEvent(_ event: PopioEvent, mailboxMessage: MailboxMessage) async throws {
         let batch = database.batch()
         batch.setData(
             data(from: event),
             forDocument: database.collection("events").document(event.id),
+            merge: true
+        )
+        batch.setData(
+            data(from: mailboxMessage),
+            forDocument: database.collection("mailboxMessages").document(mailboxMessage.id),
+            merge: false
+        )
+        try await batch.commit()
+    }
+
+    func reviewContribution(_ contribution: EventContribution, mailboxMessage: MailboxMessage) async throws {
+        let batch = database.batch()
+        batch.setData(
+            data(from: contribution),
+            forDocument: database.collection("eventContributions").document(contribution.id),
             merge: true
         )
         batch.setData(
