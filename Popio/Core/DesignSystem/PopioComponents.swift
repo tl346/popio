@@ -306,12 +306,18 @@ private final class RemoteImageMemoryCache {
 
 private struct CachedRemoteImage<Fallback: View>: View {
     let url: URL
+    let contentMode: ContentMode
     let fallback: Fallback
     @State private var image: UIImage?
     @State private var didLoad = false
 
-    init(url: URL, @ViewBuilder fallback: () -> Fallback) {
+    init(
+        url: URL,
+        contentMode: ContentMode = .fill,
+        @ViewBuilder fallback: () -> Fallback
+    ) {
         self.url = url
+        self.contentMode = contentMode
         self.fallback = fallback()
         _image = State(initialValue: RemoteImageMemoryCache.shared.image(for: url))
         _didLoad = State(initialValue: RemoteImageMemoryCache.shared.image(for: url) != nil)
@@ -322,7 +328,7 @@ private struct CachedRemoteImage<Fallback: View>: View {
             if let image {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFill()
+                    .aspectRatio(contentMode: contentMode)
             } else {
                 fallback
             }
@@ -398,15 +404,8 @@ struct MenuPhotoView: View {
                     .resizable()
                     .scaledToFit()
             } else if let imageURL {
-                AsyncImage(url: imageURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFit()
-                    default:
-                        RemoteImagePlaceholder(category: category)
-                    }
+                CachedRemoteImage(url: imageURL, contentMode: .fit) {
+                    RemoteImagePlaceholder(category: category)
                 }
             } else {
                 RemoteImagePlaceholder(category: category)
@@ -454,14 +453,12 @@ struct BannerImageView: View {
                 if let imageData, let uiImage = UIImage(data: imageData) {
                     fittedImage(Image(uiImage: uiImage), in: proxy.size)
                 } else if let imageURL {
-                    AsyncImage(url: imageURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            fittedImage(image, in: proxy.size)
-                        default:
-                            RemoteImagePlaceholder(category: category)
-                        }
+                    CachedRemoteImage(url: imageURL) {
+                        RemoteImagePlaceholder(category: category)
                     }
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .offset(y: bannerOffset(for: proxy.size.height))
+                    .clipped()
                 } else {
                     RemoteImagePlaceholder(category: category)
                 }

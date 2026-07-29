@@ -480,7 +480,7 @@ private enum MainTab: CaseIterable, Hashable {
     var systemImage: String {
         switch self {
         case .popUps:
-            return "storefront"
+            return "magnifyingglass"
         case .map:
             return "mappin"
         case .mvps:
