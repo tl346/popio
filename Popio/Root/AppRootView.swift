@@ -579,11 +579,11 @@ private struct TeardropPinTabIcon: View {
     var body: some View {
         ZStack {
             TeardropPinShape()
-                .stroke(lineWidth: 2.1)
+                .fill(.foreground)
 
             Circle()
-                .stroke(lineWidth: 1.9)
-                .frame(width: 6.5, height: 6.5)
+                .fill(Color.white)
+                .frame(width: 6.8, height: 6.8)
                 .offset(y: -3.5)
         }
     }

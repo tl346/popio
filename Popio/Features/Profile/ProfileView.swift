@@ -643,7 +643,7 @@ private struct ProfileMenuPage: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Back to profile")
 
-            Image("popioicon")
+            Image("appicontransparent")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 38, height: 38)

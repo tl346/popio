@@ -1040,6 +1040,8 @@ private struct UserLocationMapPin: View {
 }
 
 private struct MapEventCarousel: View {
+    private static let bottomTabBarClearance: CGFloat = 46
+
     let events: [PopioEvent]
     let selectedEventID: String?
     let selectEvent: (PopioEvent) -> Void
@@ -1095,7 +1097,7 @@ private struct MapEventCarousel: View {
             }
 
             Color.clear
-                .frame(height: reservesBottomBarSpace ? 4 : 0)
+                .frame(height: reservesBottomBarSpace ? Self.bottomTabBarClearance : 0)
         }
         .padding(.top, 6)
         .background {
@@ -1425,7 +1427,7 @@ private struct EventCategoryBadge: View {
     }
 }
 
-private struct EventDateGlassBadge: View {
+struct EventDateGlassBadge: View {
     let text: String
 
     var body: some View {

@@ -154,13 +154,7 @@ struct EventDetailView: View {
                 .aspectRatio(1, contentMode: .fit)
                 .clipped()
 
-            Text(dateBadgeText)
-                .font(PopioFont.custom(size: 13, weight: .semibold))
-                .foregroundStyle(Color.black)
-                .lineLimit(1)
-                .padding(.horizontal, 12)
-                .frame(height: 34)
-                .background(Color(red: 0.90, green: 0.84, blue: 1.00), in: Capsule())
+            EventDateGlassBadge(text: dateBadgeText)
                 .padding(14)
         }
         .aspectRatio(1, contentMode: .fit)
@@ -754,8 +748,12 @@ struct EventDetailView: View {
                     return true
                 }
 
-                return contribution.moderationStatus == .pending
-                    && contribution.createdByUserID == session.currentUser?.id
+                guard contribution.moderationStatus == .pending else {
+                    return false
+                }
+
+                return contribution.createdByUserID == session.currentUser?.id
+                    || session.currentUser?.isAdmin == true
             }
             .sorted { $0.createdDate > $1.createdDate }
     }
@@ -1385,9 +1383,15 @@ private struct EventExpandedPhotoView: View {
     let category: EventCategory
     @State private var activeReportRequest: UGCReportRequest?
     @State private var isConfirmingBlock = false
+    @State private var isReviewingPhoto = false
 
     private var currentContribution: EventContribution {
         session.eventContributions.first { $0.id == contribution.id } ?? contribution
+    }
+
+    private var canReviewPendingPhoto: Bool {
+        session.currentUser?.isAdmin == true
+            && currentContribution.moderationStatus == .pending
     }
 
     var body: some View {
@@ -1416,13 +1420,15 @@ private struct EventExpandedPhotoView: View {
                     Spacer()
 
                     HStack(spacing: 8) {
-                        if currentContribution.createdByUserID != session.currentUser?.id {
+                        if canReviewPendingPhoto {
+                            photoReviewControls
+                        } else if currentContribution.createdByUserID != session.currentUser?.id {
                             photoSafetyMenu
                         }
 
-                        if currentContribution.moderationStatus == .approved {
+                        if !canReviewPendingPhoto && currentContribution.moderationStatus == .approved {
                             photoLikeButton
-                        } else {
+                        } else if !canReviewPendingPhoto {
                             pendingReviewBadge
                         }
                     }
@@ -1470,6 +1476,56 @@ private struct EventExpandedPhotoView: View {
         } message: {
             Text("You will no longer see this user's pop-ups, photos, or chat messages.")
         }
+    }
+
+    private var photoReviewControls: some View {
+        HStack(spacing: 8) {
+            Button {
+                reviewPhoto(status: .approved)
+            } label: {
+                Label("Approve", systemImage: "checkmark.circle.fill")
+                    .font(PopioFont.custom(size: 13, weight: .semibold))
+                    .labelStyle(.titleAndIcon)
+                    .padding(.horizontal, 12)
+                    .frame(height: 40)
+                    .background(PopioTheme.gold.opacity(0.92), in: Capsule())
+            }
+            .foregroundStyle(.white)
+            .buttonStyle(.plain)
+            .disabled(isReviewingPhoto)
+            .accessibilityLabel("Approve photo")
+
+            Button {
+                reviewPhoto(status: .rejected)
+            } label: {
+                Label("Reject", systemImage: "xmark.circle.fill")
+                    .font(PopioFont.custom(size: 13, weight: .semibold))
+                    .labelStyle(.titleAndIcon)
+                    .padding(.horizontal, 12)
+                    .frame(height: 40)
+                    .background(Color.black.opacity(0.42), in: Capsule())
+                    .overlay {
+                        Capsule()
+                            .stroke(PopioTheme.coral.opacity(0.72), lineWidth: 1)
+                    }
+            }
+            .foregroundStyle(PopioTheme.coral)
+            .buttonStyle(.plain)
+            .disabled(isReviewingPhoto)
+            .accessibilityLabel("Reject photo")
+        }
+    }
+
+    private func reviewPhoto(status: EventModerationStatus) {
+        guard !isReviewingPhoto else { return }
+        isReviewingPhoto = true
+        session.reviewContribution(currentContribution, status: status, comment: "")
+
+        if status == .rejected {
+            dismiss()
+        }
+
+        isReviewingPhoto = false
     }
 
     private var photoSafetyMenu: some View {
