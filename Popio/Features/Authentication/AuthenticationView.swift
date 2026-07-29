@@ -197,18 +197,7 @@ struct AuthenticationView: View {
             AuthDivider()
                 .padding(.vertical, viewModel.isRegistering ? 0 : 2)
 
-            HStack(spacing: 12) {
-                AppleAuthButton(
-                    mode: viewModel.isRegistering ? .signUp : .signIn,
-                    isDisabled: viewModel.isSubmitting,
-                    onRequest: viewModel.prepareAppleRequest,
-                    onCompletion: { result in
-                        Task {
-                            await viewModel.handleAppleAuthorization(result, using: session)
-                        }
-                    }
-                )
-
+            VStack(spacing: 12) {
                 Button {
                     Task {
                         await viewModel.signInWithGoogle(
@@ -217,10 +206,20 @@ struct AuthenticationView: View {
                         )
                     }
                 } label: {
-                    SocialButtonLabel(assetImage: "googlelogo", title: "Google")
+                    SocialButtonLabel(assetImage: "googlelogo", title: "Continue with Google")
                 }
                 .buttonStyle(.plain)
                 .disabled(viewModel.isSubmitting)
+
+                AppleAuthButton(
+                    isDisabled: viewModel.isSubmitting,
+                    onRequest: viewModel.prepareAppleRequest,
+                    onCompletion: { result in
+                        Task {
+                            await viewModel.handleAppleAuthorization(result, using: session)
+                        }
+                    }
+                )
             }
 
             if !viewModel.isRegistering && viewModel.canUseBiometricLogin {
@@ -400,81 +399,22 @@ private struct SocialButtonLabel: View {
 }
 
 private struct AppleAuthButton: View {
-    let mode: SignInWithAppleButton.Label
     let isDisabled: Bool
     let onRequest: (ASAuthorizationAppleIDRequest) -> Void
     let onCompletion: (Result<ASAuthorization, Error>) -> Void
-    @State private var authorizationCoordinator = AppleAuthorizationCoordinator()
 
     var body: some View {
-        Button {
-            authorizationCoordinator.start(
-                onRequest: onRequest,
-                onCompletion: onCompletion
-            )
-        } label: {
-            SocialButtonLabel(systemImage: "apple.logo", title: "Apple")
-                .opacity(isDisabled ? 0.72 : 1)
-        }
-        .buttonStyle(.plain)
+        SignInWithAppleButton(
+            .continue,
+            onRequest: onRequest,
+            onCompletion: onCompletion
+        )
+        .signInWithAppleButtonStyle(.black)
+        .frame(maxWidth: .infinity)
+        .frame(height: 50)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .disabled(isDisabled)
-        .accessibilityLabel("Apple")
-    }
-}
-
-@MainActor
-private final class AppleAuthorizationCoordinator: NSObject,
-    ASAuthorizationControllerDelegate,
-    ASAuthorizationControllerPresentationContextProviding {
-    private var authorizationController: ASAuthorizationController?
-    private var completion: ((Result<ASAuthorization, Error>) -> Void)?
-
-    func start(
-        onRequest: (ASAuthorizationAppleIDRequest) -> Void,
-        onCompletion: @escaping (Result<ASAuthorization, Error>) -> Void
-    ) {
-        let request = ASAuthorizationAppleIDProvider().createRequest()
-        onRequest(request)
-
-        completion = onCompletion
-        let controller = ASAuthorizationController(authorizationRequests: [request])
-        controller.delegate = self
-        controller.presentationContextProvider = self
-        authorizationController = controller
-        controller.performRequests()
-    }
-
-    func authorizationController(
-        controller: ASAuthorizationController,
-        didCompleteWithAuthorization authorization: ASAuthorization
-    ) {
-        completion?(.success(authorization))
-        finishAuthorization()
-    }
-
-    func authorizationController(
-        controller: ASAuthorizationController,
-        didCompleteWithError error: Error
-    ) {
-        completion?(.failure(error))
-        finishAuthorization()
-    }
-
-    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        let activeScene = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first { $0.activationState == .foregroundActive }
-
-        if let keyWindow = activeScene?.windows.first(where: \.isKeyWindow) {
-            return keyWindow
-        }
-
-        return activeScene?.windows.first ?? UIWindow(frame: .zero)
-    }
-
-    private func finishAuthorization() {
-        completion = nil
-        authorizationController = nil
+        .opacity(isDisabled ? 0.72 : 1)
     }
 }
 
