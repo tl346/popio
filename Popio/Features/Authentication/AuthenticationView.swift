@@ -247,6 +247,14 @@ struct AuthenticationView: View {
                     viewModel.refreshBiometricAvailability()
                     viewModel.errorMessage = nil
                 }
+
+            HStack(spacing: 16) {
+                Link("Privacy Policy", destination: PopioLegalLinks.privacyPolicy)
+                Link("Terms of Service", destination: PopioLegalLinks.termsOfService)
+            }
+            .font(PopioFont.custom(size: 11.5, weight: .semibold))
+            .foregroundStyle(AuthPalette.muted)
+            .accessibilityElement(children: .contain)
         }
         .onAppear {
             viewModel.refreshBiometricAvailability()

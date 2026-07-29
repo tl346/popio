@@ -1,0 +1,86 @@
+POPIO PRIVACY POLICY
+
+Effective and last updated July 29, 2026
+
+This Privacy Policy explains how Popio ("Popio," "we," "us," or "our") collects, uses, discloses, retains, and deletes information when you use the Popio mobile application and related services (the "Service"). If you do not agree with this Policy, do not use the Service.
+
+1. INFORMATION WE COLLECT
+
+Account and profile information
+When you create or update an account, we may collect your Firebase user identifier, email address, username, display name, first and last name, biography, Instagram handle, profile photo, account creation date, administrator status, and blocked-user list.
+
+Sign-in information
+If you use Google Sign-In, Google provides Popio with an account identifier and, depending on your Google settings, your name, email address, and profile photo. If you use Sign in with Apple, Apple provides an account identifier and may provide your name and email address, including an Apple private relay address if you choose to hide your email. Popio does not receive your Google or Apple password.
+
+Location information
+With your permission, Popio accesses your device location while you use the app to center the map, sort pop-ups by distance, and show nearby results. Your live device location is processed in the app and is not stored in Popio's Firebase database. You may instead search for a location manually. Apple may process map searches and location-related requests through Core Location and MapKit under Apple's privacy terms.
+
+Locations attached to events are different: when an event is submitted, its address and coordinates are stored and displayed as part of that event.
+
+Events, photos, chats, and community activity
+We collect content you choose to submit, including event titles, descriptions, categories, addresses, coordinates, dates, times, tags, event and menu photos, contributed photos, reviews, chat messages, likes, attendance selections, and associated creator information and timestamps. Approved content may be visible to other users. Submitted events and photos may be reviewed by administrators before publication.
+
+Friends and safety information
+We collect friend requests and connections, blocked-user selections, content reports, report reasons and details, the accounts and content involved, moderation decisions, approval or rejection messages, and mailbox read status.
+
+Support communications
+When you submit feedback, report a bug, or contact support, we collect your account identifier, username, email address, message, category, and submission time. These details may be delivered to our support email through Firebase's Trigger Email extension.
+
+Technical information
+Our service providers may automatically process technical information needed to operate and secure the Service, such as device and app information, IP address, authentication events, request logs, crash or diagnostic information, and security signals. Popio does not currently use third-party advertising or enable Google Analytics for Firebase.
+
+2. HOW WE USE INFORMATION
+
+We use information to:
+- Provide accounts, authentication, profiles, event discovery, maps, chats, friend features, photos, and other Service functionality.
+- Display public profile and community content to other users.
+- Review events and photos, enforce our Terms and Community Guidelines, investigate reports, block abuse, and protect users.
+- Respond to support requests, send in-app mailbox notices, and communicate about approvals or account matters.
+- Maintain, troubleshoot, secure, and improve the Service and comply with legal obligations.
+
+3. WHEN INFORMATION IS DISCLOSED
+
+Other users. Your display name, username, biography, Instagram handle, profile photo, public activity, and approved community content may be visible to other users. Event chat messages and social activity are visible within the relevant parts of the Service.
+
+Administrators and moderators. Authorized administrators may access submitted content, reports, support communications, account information, and moderation records when needed to operate and protect the Service.
+
+Service providers. Popio uses Google Firebase for authentication, database hosting, file storage, and support-email processing; Google Sign-In for optional authentication; and Apple Sign in with Apple, Core Location, and MapKit. These providers process information on our behalf or as independent providers under their own terms and are expected to provide protections consistent with applicable law and this Policy. See Firebase Privacy and Security (https://firebase.google.com/support/privacy), Google's Privacy Policy (https://policies.google.com/privacy), and Apple's Privacy Policy (https://www.apple.com/legal/privacy/).
+
+Legal and safety reasons. We may disclose information if reasonably necessary to comply with law, legal process, or enforceable governmental requests; enforce our agreements; detect or prevent fraud, security issues, or abuse; or protect the rights, safety, and property of users, Popio, or others.
+
+Business transfers. Information may be transferred as part of a merger, financing, acquisition, reorganization, or sale of assets, subject to appropriate safeguards and notice where required.
+
+We do not sell personal information and do not share personal information for cross-context behavioral advertising.
+
+4. RETENTION AND DELETION
+
+We retain account information and community content while your account is active and for as long as needed to provide the Service. Content may remain until you delete it, delete your account, or it is removed through moderation.
+
+You can delete your account in Popio by opening Profile > Menu > Edit Profile > Delete Account. Account deletion removes your Popio authentication account, profile, events you created, photos and chat messages you submitted, friend requests involving your account, and your likes and attendance selections from active records. Associated image files are also scheduled for deletion.
+
+Reports, support requests, moderation records, transactional mailbox notices, security logs, and records required for legal compliance may be retained after account deletion for as long as reasonably necessary for safety, dispute resolution, fraud prevention, enforcement, auditing, or legal obligations. We will delete or de-identify them when they are no longer needed. Limited copies may remain temporarily in provider backups or caches until overwritten under normal retention cycles.
+
+You may also email popioadmin@gmail.com to request access, correction, or deletion. We may need to verify your identity before completing a request.
+
+5. YOUR CHOICES
+
+- Change location permission in iOS Settings. Popio supports manual location search if permission is denied.
+- Choose individual photos through Apple's photo picker rather than granting Popio full library access.
+- Edit profile information in the app, block users, report content, or delete your account.
+- Manage or revoke Google or Apple account authorization through your Google Account or Apple ID settings. Revoking authorization does not by itself delete your Popio account; use in-app account deletion or contact us as well.
+
+6. SECURITY AND INTERNATIONAL PROCESSING
+
+We use reasonable administrative, technical, and organizational measures intended to protect information. No storage or transmission method is completely secure. Popio and its providers may process information in the United States and other countries where they operate, subject to applicable safeguards.
+
+7. CHILDREN
+
+The Service is not directed to children under 13, and we do not knowingly collect personal information from children under 13. If local law requires a higher minimum age to consent to data processing, that higher age applies. Contact us if you believe a child has provided information without appropriate permission.
+
+8. CHANGES TO THIS POLICY
+
+We may update this Policy as the Service changes. We will post the updated version at https://popup-app-39ef1.web.app/privacy and revise the date above. Where required, we will provide additional notice or obtain consent.
+
+9. CONTACT US
+
+For privacy questions or requests, email popioadmin@gmail.com.

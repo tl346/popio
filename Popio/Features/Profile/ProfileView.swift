@@ -576,6 +576,49 @@ private struct ProfileMenuPage: View {
                             .stroke(ProfilePalette.line, lineWidth: 1)
                     }
 
+                    menuSectionTitle("Legal & Community")
+
+                    VStack(spacing: 0) {
+                        Link(destination: PopioLegalLinks.privacyPolicy) {
+                            ProfileMenuRow(
+                                title: "Privacy Policy",
+                                subtitle: "How Popio handles your information",
+                                systemImage: "hand.raised.fill",
+                                tint: PopioTheme.accent
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        ProfileMenuDivider()
+
+                        Link(destination: PopioLegalLinks.termsOfService) {
+                            ProfileMenuRow(
+                                title: "Terms of Service",
+                                subtitle: "The rules for using Popio",
+                                systemImage: "doc.text.fill",
+                                tint: PopioTheme.gold
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        ProfileMenuDivider()
+
+                        Link(destination: PopioLegalLinks.communityGuidelines) {
+                            ProfileMenuRow(
+                                title: "Community Guidelines",
+                                subtitle: "Help keep Popio welcoming and safe",
+                                systemImage: "person.3.fill",
+                                tint: PopioTheme.coral
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .stroke(ProfilePalette.line, lineWidth: 1)
+                    }
+
                     Button {
                         isConfirmingSignOut = true
                     } label: {

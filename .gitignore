@@ -1,2 +1,3 @@
 .secrets/
 refresh_token.txt
+.firebase/

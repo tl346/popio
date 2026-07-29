@@ -1,5 +1,11 @@
 import SwiftUI
 
+enum PopioLegalLinks {
+    static let privacyPolicy = URL(string: "https://popup-app-39ef1.web.app/privacy")!
+    static let termsOfService = URL(string: "https://popup-app-39ef1.web.app/terms")!
+    static let communityGuidelines = URL(string: "https://popup-app-39ef1.web.app/community-guidelines")!
+}
+
 enum PopioTheme {
     static let accent = Color(red: 0.58, green: 0.76, blue: 0.72)
     static let accentSoft = Color(red: 0.91, green: 0.97, blue: 0.95)

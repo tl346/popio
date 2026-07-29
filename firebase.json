@@ -1,4 +1,15 @@
 {
+  "hosting": {
+    "public": "legal-site",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "**/*.txt"
+    ],
+    "cleanUrls": true,
+    "trailingSlash": false
+  },
   "firestore": {
     "rules": "firestore.rules"
   },
