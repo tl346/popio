@@ -545,7 +545,7 @@ private struct CompactTabBar: View {
                         .stroke(selectedTab == .profile ? PopioTheme.gold : Color.white.opacity(0.95), lineWidth: 2)
                 }
         } else if tab == .map {
-            TeardropPinTabIcon()
+            TeardropPinIcon()
                 .frame(width: 22, height: 24)
                 .frame(width: 38, height: 38)
         } else {
@@ -573,54 +573,6 @@ private struct CompactTabBar: View {
         .accessibilityLabel(isAdmin ? "Review pending pop-ups" : "Add pop-up")
     }
 
-}
-
-private struct TeardropPinTabIcon: View {
-    var body: some View {
-        ZStack {
-            TeardropPinShape()
-                .fill(.foreground)
-
-            Circle()
-                .fill(Color.white)
-                .frame(width: 6.8, height: 6.8)
-                .offset(y: -3.5)
-        }
-    }
-}
-
-private struct TeardropPinShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let midX = rect.midX
-        let topY = rect.minY + rect.height * 0.05
-        let widestY = rect.minY + rect.height * 0.37
-        let pointY = rect.maxY - rect.height * 0.04
-
-        path.move(to: CGPoint(x: midX, y: pointY))
-        path.addCurve(
-            to: CGPoint(x: rect.minX + rect.width * 0.10, y: widestY),
-            control1: CGPoint(x: rect.minX + rect.width * 0.33, y: rect.minY + rect.height * 0.78),
-            control2: CGPoint(x: rect.minX + rect.width * 0.10, y: rect.minY + rect.height * 0.60)
-        )
-        path.addCurve(
-            to: CGPoint(x: midX, y: topY),
-            control1: CGPoint(x: rect.minX + rect.width * 0.10, y: rect.minY + rect.height * 0.18),
-            control2: CGPoint(x: rect.minX + rect.width * 0.30, y: topY)
-        )
-        path.addCurve(
-            to: CGPoint(x: rect.maxX - rect.width * 0.10, y: widestY),
-            control1: CGPoint(x: rect.maxX - rect.width * 0.30, y: topY),
-            control2: CGPoint(x: rect.maxX - rect.width * 0.10, y: rect.minY + rect.height * 0.18)
-        )
-        path.addCurve(
-            to: CGPoint(x: midX, y: pointY),
-            control1: CGPoint(x: rect.maxX - rect.width * 0.10, y: rect.minY + rect.height * 0.60),
-            control2: CGPoint(x: rect.maxX - rect.width * 0.33, y: rect.minY + rect.height * 0.78)
-        )
-        path.closeSubpath()
-        return path
-    }
 }
 
 private struct PopUpRequestsView: View {

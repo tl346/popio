@@ -639,7 +639,7 @@ struct EventMapView: View {
 
                     ForEach(eventsWithCoordinates) { event in
                         if let coordinate = event.coordinate {
-                            Annotation(event.title, coordinate: coordinate) {
+                            Annotation(event.title, coordinate: coordinate, anchor: .bottom) {
                                 Button {
                                     selectedEvent = event
                                 } label: {
@@ -982,36 +982,22 @@ private struct MapEventBubble: View {
     let isSelected: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            Image(systemName: markerIcon)
-                .font(PopioFont.custom(size: isSelected ? 25 : 16, weight: .bold))
-                .foregroundStyle(PopioTheme.gold)
-                .frame(width: isSelected ? 66 : 40, height: isSelected ? 66 : 40)
-                .background(Color.white, in: Circle())
-                .overlay {
-                    Circle()
-                        .stroke(PopioTheme.gold, lineWidth: isSelected ? 5 : 3)
-                }
-                .shadow(color: PopioTheme.gold.opacity(isSelected ? 0.5 : 0.25), radius: isSelected ? 22 : 10, x: 0, y: 8)
-
-            Image(systemName: "arrowtriangle.down.fill")
-                .font(PopioFont.custom(size: isSelected ? 19 : 14, weight: .bold))
-                .foregroundStyle(PopioTheme.gold)
-                .offset(y: -4)
-        }
-    }
-
-    private var markerIcon: String {
-        switch event.category {
-        case .food:
-            return "fork.knife"
-        case .matcha:
-            return "cup.and.saucer.fill"
-        case .cards:
-            return "rectangle.stack.fill"
-        case .farmersMarket:
-            return "basket.fill"
-        }
+        TeardropPinIcon()
+            .foregroundStyle(event.category.badgeTint)
+            .frame(
+                width: isSelected ? 42 : 32,
+                height: isSelected ? 46 : 36
+            )
+            .frame(width: isSelected ? 58 : 46, height: isSelected ? 62 : 50)
+            .shadow(
+                color: event.category.badgeTint.opacity(isSelected ? 0.50 : 0.30),
+                radius: isSelected ? 16 : 9,
+                x: 0,
+                y: 7
+            )
+            .contentShape(Rectangle())
+            .animation(.spring(response: 0.24, dampingFraction: 0.72), value: isSelected)
+            .accessibilityLabel("\(event.title), \(event.category.rawValue) event")
     }
 }
 

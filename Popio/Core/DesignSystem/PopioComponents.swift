@@ -189,6 +189,56 @@ struct CategoryBadge: View {
     }
 }
 
+struct TeardropPinIcon: View {
+    var centerColor: Color = .white
+
+    var body: some View {
+        ZStack {
+            TeardropPinShape()
+                .fill(.foreground)
+
+            Circle()
+                .fill(centerColor)
+                .frame(width: 6.8, height: 6.8)
+                .offset(y: -3.5)
+        }
+    }
+}
+
+private struct TeardropPinShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let midX = rect.midX
+        let topY = rect.minY + rect.height * 0.05
+        let widestY = rect.minY + rect.height * 0.37
+        let pointY = rect.maxY - rect.height * 0.04
+
+        path.move(to: CGPoint(x: midX, y: pointY))
+        path.addCurve(
+            to: CGPoint(x: rect.minX + rect.width * 0.10, y: widestY),
+            control1: CGPoint(x: rect.minX + rect.width * 0.33, y: rect.minY + rect.height * 0.78),
+            control2: CGPoint(x: rect.minX + rect.width * 0.10, y: rect.minY + rect.height * 0.60)
+        )
+        path.addCurve(
+            to: CGPoint(x: midX, y: topY),
+            control1: CGPoint(x: rect.minX + rect.width * 0.10, y: rect.minY + rect.height * 0.18),
+            control2: CGPoint(x: rect.minX + rect.width * 0.30, y: topY)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.maxX - rect.width * 0.10, y: widestY),
+            control1: CGPoint(x: rect.maxX - rect.width * 0.30, y: topY),
+            control2: CGPoint(x: rect.maxX - rect.width * 0.10, y: rect.minY + rect.height * 0.18)
+        )
+        path.addCurve(
+            to: CGPoint(x: midX, y: pointY),
+            control1: CGPoint(x: rect.maxX - rect.width * 0.10, y: rect.minY + rect.height * 0.60),
+            control2: CGPoint(x: rect.maxX - rect.width * 0.33, y: rect.minY + rect.height * 0.78)
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
 extension EventCategory {
     var badgeTint: Color {
         switch self {
